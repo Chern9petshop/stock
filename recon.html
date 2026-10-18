@@ -186,11 +186,16 @@ async function readFile(kind,file){
   const buf=await file.arrayBuffer();let wb;
   try{wb=XLSX.read(buf,{type:'array'})}catch(e){toast('อ่านไฟล์นี้ไม่ได้');return}
   const sheets=wb.SheetNames.map(n=>({n,rows:XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,raw:true,defval:''})}));
-  const F={kind,name:file.name,sheets,si:0};pickSheet(F,0);files[kind]=F;drawFile(kind);compute();
+  /* เลือกชีทที่มีรหัส/ชื่อสินค้าที่จับคู่ได้มากที่สุด (แม่แบบ BigSeller มักมีชีทคำแนะนำอยู่หน้าแรก) */
+  let bi=0,bh=-1;sheets.forEach((sh,i)=>{let n=0;sh.rows.slice(0,600).forEach(r=>r.forEach(c=>{if(c!==''&&resolveCell(c))n++}));if(n>bh){bh=n;bi=i}});
+  const F={kind,name:file.name,sheets,si:bi};pickSheet(F,bi);files[kind]=F;drawFile(kind);compute();
 }
 function pickSheet(F,si){
   F.si=si;const rows=F.sheets[si].rows;let hr=0;
-  for(let i=0;i<Math.min(15,rows.length);i++){if(rows[i].some(c=>RX.sku.test(String(c)))){hr=i;break}}
+  /* แถวหัวตาราง = แถวเหนือแถวแรกที่มีสินค้าที่จับคู่ได้ (ถ้าไม่เจอ ใช้แถวแรกที่มีคำว่า SKU/รหัส) */
+  let first=-1;for(let i=0;i<Math.min(60,rows.length);i++){if(rows[i].some(c=>c!==''&&resolveCell(c))){first=i;break}}
+  if(first>0){hr=first-1;for(let i=first-1;i>=0&&i>=first-6;i--){if(rows[i].some(c=>RX.sku.test(String(c))||/จำนวน|qty/i.test(String(c)))){hr=i;break}}}
+  else for(let i=0;i<Math.min(15,rows.length);i++){if(rows[i].some(c=>RX.sku.test(String(c)))){hr=i;break}}
   F.hr=hr;F.head=(rows[hr]||[]).map((h,i)=>String(h||('คอลัมน์ '+(i+1))).trim());
   /* จับคู่ได้ทุกคอลัมน์ (รหัส / SKU / GTIN / บาร์โค้ด / ชื่อ) เรียงจากคอลัมน์ที่จับคู่ได้มากสุดก่อน */
   const body=rows.slice(hr+1,hr+401);const hits=F.head.map((h,i)=>{let n=0;body.forEach(r=>{if(resolveCell(r[i]))n++});return[i,n]});
