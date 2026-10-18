@@ -647,8 +647,10 @@ function saveEntry(){
   }
   commit();try{navigator.vibrate&&navigator.vibrate(40)}catch(e){}
   toast(s.edit?'แก้แล้ว':(s.op==='set'?'ตั้งยอดเป็น ':(s.op==='sub'?'ลด ':'บันทึก +'))+fmt(q)+' '+u.u);
-  $('q').value='';renderResults();closeSheet();
+  const viaScan=fromScanner;$('q').value='';renderResults();closeSheet();if(!viaScan)focusSearch();
 }
+/* หลังบันทึก กลับไปที่ช่องค้นหา พร้อมพิมพ์/ยิงบาร์โค้ดตัวต่อไปทันที */
+function focusSearch(){const el=$(tab==='dmg'?'dq':'q');if(!el)return;try{el.focus({preventScroll:true});el.select()}catch(e){}try{el.scrollIntoView({block:'center',behavior:'smooth'})}catch(e){}}
 function openUnknown(bar){
   sheetState={unknown:bar,pick:null,ui:-1};
   openSheet('<div><div class="pname" id="sheetTitle">ไม่พบบาร์โค้ดนี้</div><div class="pmeta"><span class="mono">'+esc(bar)+'</span></div></div>'+
@@ -997,7 +999,7 @@ async function saveDamage(){
       damage[rec.c]=(damage[rec.c]||0)+rec.base;
       dmgList.unshift(rec);s.busy=false;closeSheetQuiet();
       try{navigator.vibrate&&navigator.vibrate(40)}catch(e){}
-      toast('บันทึกชำรุด −'+fmt(q)+' '+u.u+' แล้ว');$('dq').value='';renderDResults();renderDmg();
+      toast('บันทึกชำรุด −'+fmt(q)+' '+u.u+' แล้ว');$('dq').value='';renderDResults();renderDmg();if(!fromScanner)focusSearch();
       if(tab==='sum')renderSum();return;
     }catch(e){if(k<2)await new Promise(r=>setTimeout(r,1500*(k+1)))}
   }
@@ -1016,6 +1018,7 @@ $('dq').addEventListener('input',renderDResults);
 $('dq').addEventListener('keydown',e=>{
   if(e.key!=='Enter')return;e.preventDefault();const v=$('dq').value.trim();if(!v)return;
   if(/^\d{8,14}$/.test(v)&&handleCode(v,'key')){$('dq').value='';renderDResults();return}
+  const ex=byCode.get(v)||PRODUCTS.find(p=>p.c.toLowerCase()===v.toLowerCase());if(ex){openProduct(ex,0);return}
   const r=search(v);if(r.length===1)openProduct(r[0],0);
 });
 $('dresults').addEventListener('click',e=>{const b=e.target.closest('[data-dcode]');if(b){fromScanner=false;openProduct(byCode.get(b.dataset.dcode),0)}});
@@ -1167,6 +1170,7 @@ $('q').addEventListener('input',renderResults);
 $('q').addEventListener('keydown',e=>{
   if(e.key!=='Enter')return;e.preventDefault();const v=$('q').value.trim();if(!v)return;
   if(/^\d{8,14}$/.test(v)&&handleCode(v,'key')){$('q').value='';renderResults();return}
+  const ex=byCode.get(v)||PRODUCTS.find(p=>p.c.toLowerCase()===v.toLowerCase());if(ex){openProduct(ex,0);return}
   const r=search(v);if(r.length===1)openProduct(r[0],0);
 });
 $('results').addEventListener('click',e=>{const b=e.target.closest('[data-code]');if(b){fromScanner=false;openProduct(byCode.get(b.dataset.code),0)}});
