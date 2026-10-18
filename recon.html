@@ -113,15 +113,7 @@ tr.grp td{background:var(--sunk);font-weight:600;font-size:12px;color:var(--mute
   <input type="file" id="poIn" class="vh" accept=".xlsx,.xls,.csv">
 
   <h2>วิธีคิด</h2>
-  <div class="grid">
-    <div class="card"><div class="opt"><b>เปิดล่วงหน้า</b>
-      <label class="ck"><input type="radio" name="po" value="1"> <span>BigSeller ตัดสต็อกไปแล้ว แต่ของยังอยู่ในคลังตอนนับ → <b>บวกกลับ</b></span></label>
-      <label class="ck"><input type="radio" name="po" value="-1"> <span>ของออกจากคลังไปแล้ว แต่ BigSeller ยังไม่ตัด → <b>ลบออก</b></span></label></div></div>
-    <div class="card"><div class="opt"><b>ของชำรุด</b>
-      <label class="ck"><input type="radio" name="dm" value="-1"> <span>แยกของชำรุดออกแล้ว ไม่ได้นับรวม → <b>ลบออก</b> จาก BigSeller</span></label>
-      <label class="ck"><input type="radio" name="dm" value="0"> <span>ของชำรุดยังวางรวมและนับรวมอยู่ → <b>ไม่หัก</b></span></label></div></div>
-  </div>
-  <div class="formula" id="formula" style="margin-top:10px"></div>
+  <div class="formula" id="formula"></div>
 
   <h2>ผลการเทียบ</h2>
   <div id="msg"></div>
@@ -165,6 +157,12 @@ function resolve(raw){
   const b=byBar.get(k)||byBar.get(k.replace(/^0+/,''))||byBar.get('0'+k);if(b)return b;
   return null;
 }
+/* จับคู่ด้วยชื่อสินค้า (ตรงทั้งชื่อ ไม่สนช่องว่าง/ตัวพิมพ์ และตัดรหัสหน้าชื่อได้) */
+const normN=s=>String(s==null?'':s).toLowerCase().replace(/เเ/g,'แ').replace(/[\s\-_.,()\[\]\/×x*+&'"]+/g,'');
+const byName=new Map();
+P.forEach(p=>{const a=normN(p.n),b=normN(p.n.replace(/^\s*[A-Za-z0-9]+\s*-\s*/,''));[a,b].forEach(k=>{if(k.length>=6){if(!byName.has(k))byName.set(k,p);else if(byName.get(k)!==p)byName.set(k,null)}})});
+function resolveName(v){const k=normN(v);if(k.length<6)return null;const p=byName.get(k);return p?{p,f:1}:null}
+function resolveCell(v){return resolve(v)||resolveName(v)}
 function splitUnits(p,base){
   const big=[...p.units].filter(u=>u.f>1).sort((a,b)=>b.f-a.f).filter((u,i,a)=>a.findIndex(x=>x.f===u.f)===i);
   const L=big[0],M=big[1];let rest=base;const o=[];
@@ -175,7 +173,7 @@ function splitUnits(p,base){
 /* state */
 let wh=ls.get('rc_wh')||'CM',date=today(),cnt=new Map(),dmg={},loaded=false,loadErr='',confirmed=null;
 let files={bs:null,po:null};let flt='diff';
-let sPo=+(ls.get('rc_po')||1),sDm=+(ls.get('rc_dm')||-1);
+const sPo=1,sDm=-1;
 /* file parsing */
 let xlsxP=null;
 function loadXLSX(){if(window.XLSX)return Promise.resolve();if(xlsxP)return xlsxP;
@@ -193,40 +191,44 @@ function pickSheet(F,si){
   F.si=si;const rows=F.sheets[si].rows;let hr=0;
   for(let i=0;i<Math.min(15,rows.length);i++){if(rows[i].some(c=>RX.sku.test(String(c)))){hr=i;break}}
   F.hr=hr;F.head=(rows[hr]||[]).map((h,i)=>String(h||('คอลัมน์ '+(i+1))).trim());
-  /* เลือกคอลัมน์รหัสจากคอลัมน์ที่จับคู่กับไฟล์สินค้าได้มากที่สุด */
-  const body=rows.slice(hr+1,hr+401);let best=-1,bh=0;
-  F.head.forEach((h,i)=>{let n=0;body.forEach(r=>{if(resolve(r[i]))n++});if(n>bh){bh=n;best=i}});
-  F.cSku=best>=0?best:guess(F.head,RX.sku);
+  /* จับคู่ได้ทุกคอลัมน์ (รหัส / SKU / GTIN / บาร์โค้ด / ชื่อ) เรียงจากคอลัมน์ที่จับคู่ได้มากสุดก่อน */
+  const body=rows.slice(hr+1,hr+401);const hits=F.head.map((h,i)=>{let n=0;body.forEach(r=>{if(resolveCell(r[i]))n++});return[i,n]});
+  F.order=hits.filter(x=>x[1]>0).sort((a,b)=>b[1]-a[1]).map(x=>x[0]);
+  F.cSku=F.order.length?F.order[0]:guess(F.head,RX.sku);
+  F.idCols=F.head.map((h,i)=>i).filter(i=>/sku|รหัส|gtin|barcode|บาร์โค้ด|ชื่อ|name|สินค้า/i.test(F.head[i]));
   const pref=F.kind==='bs'?/ที่มีอยู่|available|พร้อมขาย|คงเหลือ|คงคลัง|on.?hand/i:/จำนวน|qty|quantity/i;
   F.cQty=guess(F.head,pref,F.cSku);if(F.cQty<0)F.cQty=guess(F.head,RX.qty,F.cSku);
+  F.order=F.order.filter(i=>i!==F.cQty);F.idCols=F.idCols.filter(i=>i!==F.cQty);
   F.cWh=guess(F.head,RX.wh,-1);F.vWh='';
   if(F.cWh>=0){const vals=whVals(F);const hit=vals.find(v=>v.includes(WH[wh]));F.vWh=hit||''}
 }
 function whVals(F){const rows=F.sheets[F.si].rows.slice(F.hr+1);return[...new Set(rows.map(r=>String(r[F.cWh]||'').trim()).filter(Boolean))].slice(0,50)}
 function aggFile(F){
-  const m=new Map(),unm=new Map();if(!F||F.cSku<0||F.cQty<0)return{m,unm,rows:0};
-  let rows=0;
+  const m=new Map(),unm=new Map(),by={};if(!F||F.cQty<0)return{m,unm,rows:0,by};
+  let rows=0;const cols=F.order.length?F.order:[F.cSku].filter(i=>i>=0);
   F.sheets[F.si].rows.slice(F.hr+1).forEach(r=>{
     if(F.cWh>=0&&F.vWh&&String(r[F.cWh]||'').trim()!==F.vWh)return;
-    const k=r[F.cSku];const q=parseFloat(String(r[F.cQty]).replace(/,/g,''));if(String(k).trim()===''||isNaN(q))return;rows++;
-    const h=resolve(k);if(!h){const kk=String(k).trim();unm.set(kk,(unm.get(kk)||0)+q);return}
-    m.set(h.p.c,(m.get(h.p.c)||0)+q*h.f);
+    const q=parseFloat(String(r[F.cQty]).replace(/,/g,''));if(isNaN(q))return;
+    const ids=(F.idCols.length?F.idCols:cols).map(i=>String(r[i]==null?'':r[i]).trim()).filter(Boolean);if(!ids.length)return;rows++;
+    let h=null,used=-1;for(const i of cols){h=resolveCell(r[i]);if(h){used=i;break}}
+    if(!h){const kk=ids.slice(0,3).join(' · ');unm.set(kk,(unm.get(kk)||0)+q);return}
+    by[used]=(by[used]||0)+1;m.set(h.p.c,(m.get(h.p.c)||0)+q*h.f);
   });
-  return{m,unm,rows};
+  return{m,unm,rows,by};
 }
 function drawFile(kind){
   const F=files[kind];const box=$(kind+'Info');const pill=$(kind+'Pill');
   if(!F){box.innerHTML='';pill.className='pill '+(kind==='po'&&$('noPo').checked?'auto':'wait');pill.textContent=kind==='po'&&$('noPo').checked?'ไม่มีวันนี้':'ยังไม่อัปโหลด';return}
-  const a=aggFile(F);const ok=F.cSku>=0&&F.cQty>=0;
+  const a=aggFile(F);const ok=F.cQty>=0&&a.m.size>0;
   pill.className='pill '+(ok?'ok':'bad');pill.textContent=ok?'อัปโหลดแล้ว':'เลือกคอลัมน์';
   const opt=(sel)=>F.head.map((h,i)=>'<option value="'+i+'"'+(i===sel?' selected':'')+'>'+esc(h)+'</option>').join('');
-  box.innerHTML='<div class="hint">'+esc(F.name)+' · '+a.rows+' แถว · จับคู่ได้ '+a.m.size+' สินค้า'+(a.unm.size?' · <b style="color:var(--bad)">ไม่พบรหัส '+a.unm.size+'</b>':'')+'</div>'+
+  box.innerHTML='<div class="hint">'+esc(F.name)+' · '+a.rows+' แถว · จับคู่ได้ '+a.m.size+' สินค้า'+(a.unm.size?' · <b style="color:var(--bad)">จับคู่ไม่ได้ '+a.unm.size+'</b>':'')+'</div>'+
     '<div class="cols">'+(F.sheets.length>1?'<span>ชีท</span><select class="field" data-k="'+kind+'" data-f="si">'+F.sheets.map((s,i)=>'<option value="'+i+'"'+(i===F.si?' selected':'')+'>'+esc(s.n)+'</option>').join('')+'</select>':'')+
-    '<span>รหัส/SKU</span><select class="field" data-k="'+kind+'" data-f="cSku"><option value="-1">— เลือก —</option>'+opt(F.cSku)+'</select>'+
+    '<span>จับคู่ด้วย</span><span class="hint">'+(Object.keys(a.by).length?Object.entries(a.by).sort((x,y)=>y[1]-x[1]).map(([i,n])=>esc(F.head[i])+' '+n).join(' · '):'ไม่พบคอลัมน์ที่จับคู่ได้')+'</span>'+
     '<span>จำนวน</span><select class="field" data-k="'+kind+'" data-f="cQty"><option value="-1">— เลือก —</option>'+opt(F.cQty)+'</select>'+
     '<span>คอลัมน์คลัง</span><select class="field" data-k="'+kind+'" data-f="cWh"><option value="-1">ไม่มี / ไม่กรอง</option>'+opt(F.cWh)+'</select>'+
     (F.cWh>=0?'<span>เฉพาะคลัง</span><select class="field" data-k="'+kind+'" data-f="vWh"><option value="">ทุกค่า</option>'+whVals(F).map(v=>'<option'+(v===F.vWh?' selected':'')+'>'+esc(v)+'</option>').join('')+'</select>':'')+'</div>'+
-    (a.unm.size?'<details><summary class="hint" style="cursor:pointer">รหัสที่ไม่พบในไฟล์สินค้า ('+a.unm.size+')</summary><div class="unm mono">'+[...a.unm].slice(0,300).map(([k,q])=>esc(k)+' · '+fmt(q)).join('<br>')+'</div></details>':'')+
+    (a.unm.size?'<details><summary class="hint" style="cursor:pointer">แถวที่จับคู่ไม่ได้ ('+a.unm.size+')</summary><div class="unm mono">'+[...a.unm].slice(0,300).map(([k,q])=>esc(k)+' · '+fmt(q)).join('<br>')+'</div></details>':'')+
     '<button class="btn" type="button" data-clear="'+kind+'" style="align-self:flex-start;padding:5px 12px">เอาไฟล์ออก</button>';
 }
 document.addEventListener('change',e=>{
@@ -234,8 +236,6 @@ document.addEventListener('change',e=>{
   if(t.dataset&&t.dataset.k){const F=files[t.dataset.k];const f=t.dataset.f;if(f==='si')pickSheet(F,+t.value);else if(f==='vWh')F.vWh=t.value;else{F[f]=+t.value;if(f==='cWh')F.vWh=''}drawFile(t.dataset.k);compute();return}
   if(t.id==='bsIn'||t.id==='poIn'){const f=t.files&&t.files[0];t.value='';if(f)readFile(t.id==='bsIn'?'bs':'po',f);return}
   if(t.id==='noPo'){if(t.checked)files.po=null;drawFile('po');compute();return}
-  if(t.name==='po'){sPo=+t.value;ls.set('rc_po',sPo);compute()}
-  if(t.name==='dm'){sDm=+t.value;ls.set('rc_dm',sDm);compute()}
   if(t.id==='dt'){date=t.value||today();load()}
 });
 document.addEventListener('click',e=>{const c=e.target.closest('[data-clear]');if(c){files[c.dataset.clear]=null;drawFile(c.dataset.clear);compute()}});
@@ -264,18 +264,16 @@ $('whs').addEventListener('click',e=>{const b=e.target.closest('[data-w]');if(b&
 /* compute */
 let rows=[];
 function compute(){
-  document.querySelectorAll('input[name=po]').forEach(r=>r.checked=+r.value===sPo);
-  document.querySelectorAll('input[name=dm]').forEach(r=>r.checked=+r.value===sDm);
-  $('formula').innerHTML='ยอดที่ควรมี = BigSeller '+(sPo>0?'<b>+</b>':'<b>−</b>')+' เปิดล่วงหน้า'+(sDm?' <b>−</b> ชำรุด':' (ไม่หักชำรุด)')+' &nbsp;·&nbsp; <b>ผลต่าง = นับจริง − ยอดที่ควรมี</b> (บวก = ของเกิน, ลบ = ของขาด)';
+  $('formula').innerHTML='<b>ยอดจริง</b> = นับได้ <b>+</b> เปิดล่วงหน้า &nbsp;·&nbsp; <b>ยอดที่ควรมี</b> = BigSeller'+(sDm?' <b>−</b> ชำรุด':' (ไม่หักชำรุด)')+' &nbsp;·&nbsp; <b>ผลต่าง = ยอดจริง − ยอดที่ควรมี</b> (บวก = ของเกิน, ลบ = ของขาด)';
   const bs=files.bs?aggFile(files.bs).m:null,po=files.po?aggFile(files.po).m:new Map();
   rows=[];
   if(!bs){paintRows();return}
   const codes=new Set([...bs.keys(),...po.keys(),...Object.keys(dmg),...[...cnt].filter(([c,v])=>Math.abs(v)>1e-9).map(([c])=>c)]);
   codes.forEach(c=>{
-    const p=byCode.get(c);const b=bs.get(c)||0,o=po.get(c)||0,d=dmg[c]||0,n=cnt.get(c)||0;const counted=cnt.has(c);
-    const exp=Math.round((b+sPo*o+sDm*d)*1000)/1000;const diff=Math.round((n-exp)*1000)/1000;
+    const p=byCode.get(c);const b=bs.get(c)||0,o=po.get(c)||0,d=dmg[c]||0,n=cnt.get(c)||0;const counted=cnt.has(c)||po.has(c);
+    const tot=Math.round((n+o)*1000)/1000;const exp=Math.round((b+sDm*d)*1000)/1000;const diff=Math.round((tot-exp)*1000)/1000;
     const st=!counted?'nocount':(!bs.has(c)?'nobs':(diff===0?'match':'diff'));
-    rows.push({c,p,n:p?p.n:c,g:p?p.g:'',bu:p?baseUnit(p):'',cnt:n,counted,bs:b,po:o,dm:d,exp,diff,st});
+    rows.push({c,p,n:p?p.n:c,g:p?p.g:'',bu:p?baseUnit(p):'',cnt:n,counted,bs:b,po:o,tot,dm:d,exp,diff,st});
   });
   rows.sort((a,b)=>(a.g||'zz').localeCompare(b.g||'zz','th')||a.n.localeCompare(b.n,'th'));
   paintRows();
@@ -283,7 +281,7 @@ function compute(){
 const ST={diff:'ไม่ตรง',match:'ตรง',nocount:'ยังไม่นับ',nobs:'ไม่มีใน BigSeller'};
 function paintRows(){
   const out=$('out');
-  const ready=!!files.bs&&files.bs.cSku>=0&&files.bs.cQty>=0;
+  const ready=!!files.bs&&files.bs.cQty>=0&&aggFile(files.bs).m.size>0;
   $('confirm').disabled=!ready||!loaded;$('xlsx').disabled=!rows.length;$('copy').disabled=!rows.length;
   $('msg').innerHTML=loadErr?'<div class="notice bad">'+esc(loadErr)+'</div>':(!files.bs?'':(!files.po&&!$('noPo').checked?'<div class="notice warn">ยังไม่ได้อัปโหลดไฟล์เปิดล่วงหน้า ถ้าวันนี้ไม่มี ให้ติ๊ก “วันนี้ไม่มีเปิดล่วงหน้า”</div>':''));
   if(!files.bs){$('stats').innerHTML='';$('flt').innerHTML='';out.innerHTML='<div class="empty">อัปโหลดไฟล์คงคลัง BigSeller เพื่อเริ่มเทียบ</div>';return}
@@ -296,22 +294,23 @@ function paintRows(){
   const vis=rows.filter(r=>(flt==='all'||(flt==='short'?r.st==='diff'&&r.diff<0:flt==='over'?r.st==='diff'&&r.diff>0:r.st===flt))&&(!q||((r.p?r.p.key:r.c.toLowerCase()).includes(q))));
   let g=null,h='';
   vis.forEach(r=>{
-    if(r.g!==g){g=r.g;h+='<tr class="grp"><td colspan="8">'+esc(g||'ไม่พบในไฟล์สินค้า')+'</td></tr>'}
+    if(r.g!==g){g=r.g;h+='<tr class="grp"><td colspan="9">'+esc(g||'ไม่พบในไฟล์สินค้า')+'</td></tr>'}
     const dc=r.diff===0?'zero':(r.diff>0?'pos':'neg');
     h+='<tr><td><span>'+esc(r.n)+'</span><span class="sub mono">'+esc(r.c)+'</span></td>'+
-      '<td class="n">'+(r.counted?'<b>'+fmt(r.cnt)+'</b>':'<span class="sub">ยังไม่นับ</span>')+(r.counted&&r.p?'<span class="sub">'+esc(splitUnits(r.p,r.cnt))+'</span>':'')+'</td>'+
-      '<td class="n">'+fmt(r.bs)+'</td><td class="n">'+(r.po?fmt(r.po):'–')+'</td><td class="n">'+(r.dm?fmt(r.dm):'–')+'</td>'+
+      '<td class="n">'+(cnt.has(r.c)?fmt(r.cnt):'<span class="sub">ยังไม่นับ</span>')+'</td><td class="n">'+(r.po?'+'+fmt(r.po):'–')+'</td>'+
+      '<td class="n">'+(r.counted?'<b>'+fmt(r.tot)+'</b>'+(r.p?'<span class="sub">'+esc(splitUnits(r.p,r.tot))+'</span>':''):'–')+'</td>'+
+      '<td class="n">'+fmt(r.bs)+'</td><td class="n">'+(r.dm?'−'+fmt(r.dm):'–')+'</td>'+
       '<td class="n"><b>'+fmt(r.exp)+'</b></td><td class="n diff '+dc+'">'+(r.diff>0?'+':'')+fmt(r.diff)+(r.diff&&r.p?'<span class="sub">'+esc(splitUnits(r.p,Math.abs(r.diff)))+'</span>':'')+'</td>'+
       '<td>'+esc(r.bu)+'</td></tr>';
   });
-  out.innerHTML=vis.length?'<div class="tablewrap"><table><thead><tr><th>สินค้า</th><th class="n">นับจริง</th><th class="n">BigSeller</th><th class="n">เปิดล่วงหน้า</th><th class="n">ชำรุด</th><th class="n">ควรมี</th><th class="n">ผลต่าง</th><th>หน่วย</th></tr></thead><tbody>'+h+'</tbody></table></div>':'<div class="empty">ไม่มีรายการตามตัวกรองนี้</div>';
+  out.innerHTML=vis.length?'<div class="tablewrap"><table><thead><tr><th>สินค้า</th><th class="n">นับได้</th><th class="n">เปิดล่วงหน้า</th><th class="n">ยอดจริง</th><th class="n">BigSeller</th><th class="n">ชำรุด</th><th class="n">ควรมี</th><th class="n">ผลต่าง</th><th>หน่วย</th></tr></thead><tbody>'+h+'</tbody></table></div>':'<div class="empty">ไม่มีรายการตามตัวกรองนี้</div>';
 }
 $('flt').addEventListener('click',e=>{const b=e.target.closest('[data-fl]');if(b){flt=b.dataset.fl;paintRows()}});
 $('q').addEventListener('input',paintRows);
 /* outputs */
 function outRows(){
-  const head=['สถานะ','หมวด','รหัสสินค้า','ชื่อสินค้า','หน่วยเล็กสุด','นับจริง','BigSeller','เปิดล่วงหน้า','ชำรุด','ยอดที่ควรมี','ผลต่าง','ผลต่าง (แยกหน่วย)'];
-  return [head].concat(rows.map(r=>[ST[r.st],r.g,r.c,r.n,r.bu,r.counted?r.cnt:'',r.bs,r.po||0,r.dm||0,r.exp,r.diff,r.p&&r.diff?(r.diff<0?'−':'+')+splitUnits(r.p,Math.abs(r.diff)):'']));
+  const head=['สถานะ','หมวด','รหัสสินค้า','ชื่อสินค้า','หน่วยเล็กสุด','นับได้','เปิดล่วงหน้า','ยอดจริง (นับ+เปิดล่วงหน้า)','BigSeller','ชำรุด','ยอดที่ควรมี','ผลต่าง','ผลต่าง (แยกหน่วย)'];
+  return [head].concat(rows.map(r=>[ST[r.st],r.g,r.c,r.n,r.bu,cnt.has(r.c)?r.cnt:'',r.po||0,r.tot,r.bs,r.dm||0,r.exp,r.diff,r.p&&r.diff?(r.diff<0?'−':'+')+splitUnits(r.p,Math.abs(r.diff)):'']));
 }
 $('copy').onclick=()=>{const t=outRows().map(r=>r.map(v=>String(v).replace(/[\t\n]/g,' ')).join('\t')).join('\n');
   try{navigator.clipboard.writeText(t).then(()=>toast('คัดลอกแล้ว วางใน Google Sheet ได้เลย'),()=>toast('คัดลอกไม่ได้'))}catch(e){toast('คัดลอกไม่ได้')}};
@@ -334,7 +333,7 @@ $('confirm').onclick=()=>{
     const meta={who:'แอดมิน',bs:files.bs&&{name:files.bs.name,sku:files.bs.head[files.bs.cSku],qty:files.bs.head[files.bs.cQty],wh:files.bs.vWh},
       po:files.po?{name:files.po.name,sku:files.po.head[files.po.cSku],qty:files.po.head[files.po.cQty],wh:files.po.vWh}:null,noPo:$('noPo').checked,sPo,sDm,
       n:rows.length,diff:rows.filter(r=>r.st==='diff').length};
-    try{const r=await gs('saveRecon',wh,date,meta,rows.map(r=>({c:r.c,n:r.n,bu:r.bu,cnt:r.counted?r.cnt:'',bs:r.bs,po:r.po,dm:r.dm,exp:r.exp,diff:r.diff,st:ST[r.st]})));
+    try{const r=await gs('saveRecon',wh,date,meta,rows.map(r=>({c:r.c,n:r.n,bu:r.bu,cnt:cnt.has(r.c)?r.cnt:'',bs:r.bs,po:r.po,dm:r.dm,exp:r.exp,diff:r.diff,st:ST[r.st]})));
       confirmed={who:'แอดมิน',at:r.at,meta};paintTop();close();toast('ยืนยันรีพอตแล้ว บันทึกลง Sheet แท็บ “เทียบสต็อก”',3500)}
     catch(e){ok.disabled=false;ok.textContent='ยืนยัน';toast('บันทึกไม่สำเร็จ: '+(e.message||'ลองใหม่'),4000)}
   };
