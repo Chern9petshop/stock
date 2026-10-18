@@ -444,6 +444,8 @@ function applyLink(bar,v){
   links.set(bar,v);indexBar(bar,p,ui);reindex(p);
 }
 const STAFF=['ดิว','ดรีม','บูม','ป๊อด','บอล','แชมป์','ต้า','แม็ก','เก้'];
+const ADMIN='แอดมิน',ADMIN_PIN='9999';
+const isAdmin=()=>curCounter()===ADMIN;
 let names=STAFF.slice();
 function setNames(list){names=STAFF.slice()}
 async function rememberName(n){
@@ -769,7 +771,7 @@ function imgUrl(c){const id=imgId(c);return id?'https://drive.google.com/thumbna
 function paintImg(){
   const b=$('pimgBox');if(!b||!sheetState||!sheetState.p)return;const u=imgUrl(sheetState.p.c);
   b.innerHTML=(u?'<img class="pimg" src="'+u+'" alt="รูปสินค้า" referrerpolicy="no-referrer" onerror="this.remove()">':'')+
-    (mode==='gas'?'<label class="ghost" for="imgIn" style="cursor:pointer">'+(u?'เปลี่ยนรูปสินค้า':'+ เพิ่มรูปสินค้า')+'</label>':'');
+    (mode==='gas'&&isAdmin()?'<label class="ghost" for="imgIn" style="cursor:pointer">'+(u?'เปลี่ยนรูปสินค้า':'+ เพิ่มรูปสินค้า')+'</label>':'');
   b.hidden=!b.innerHTML;
 }
 async function shrink(file,max){
@@ -780,7 +782,7 @@ async function shrink(file,max){
 }
 $('imgIn').addEventListener('change',async e=>{
   const f=e.target.files&&e.target.files[0];e.target.value='';
-  if(!f||mode!=='gas'||!sheetState||!sheetState.p)return;const code=sheetState.p.c;
+  if(!f||mode!=='gas'||!isAdmin()||!sheetState||!sheetState.p)return;const code=sheetState.p.c;
   toast('กำลังอัปโหลดรูป…',30000);
   try{const id=await gs('uploadImage',code,await shrink(f,900));imgOverride[code]=id;paintImg();toast('เพิ่มรูปแล้ว')}
   catch(x){toast('อัปโหลดรูปไม่สำเร็จ ตรวจสัญญาณแล้วลองใหม่')}
@@ -889,7 +891,13 @@ function openNameSheet(after,forced){
   sheetState={pickName:true,after,forced:!!forced};
   openSheet('<div class="pname" id="sheetTitle">ใครเป็นคนนับวันนี้</div><div class="hint">'+(forced?'<b>เลือกชื่อก่อนเริ่มนับ</b> ':'')+'เลือกได้ครั้งเดียวต่อวัน เปลี่ยนไม่ได้จนถึงเที่ยงคืน ใช้กับทุกรายการที่บันทึกจากเครื่องนี้</div>'+
     '<div class="units" style="grid-template-columns:repeat(3,1fr)">'+names.map(n=>'<button class="unit" type="button" data-name="'+esc(n)+'" aria-pressed="false" style="text-align:center;padding:12px 6px"><b>'+esc(n)+'</b></button>').join('')+'</div>'+
+    '<button class="unit" type="button" data-name="'+ADMIN+'" aria-pressed="false" style="text-align:center;padding:10px 6px;border-style:dashed"><b>🔒 '+ADMIN+'</b><span>ต้องใส่ PIN · ใช้เพิ่มรูปสินค้า</span></button>'+
+    '<div id="pinBox" hidden><input id="pinIn" class="field" type="password" inputmode="numeric" maxlength="8" autocomplete="off" placeholder="ใส่ PIN แอดมิน" style="width:100%;background:var(--surface);font-size:18px;padding:11px;text-align:center;letter-spacing:.4em"></div>'+
     '<button class="save" id="nmOk" type="button" disabled>เลือกชื่อก่อน</button>'+(forced?'':'<div class="btnrow"><button class="btn" id="cancelBtn" type="button">ยกเลิก</button></div>'));
+}
+function tryConfirm(n){
+  if(n===ADMIN){const p=$('pinIn');if(!p||p.value!==ADMIN_PIN){toast('PIN ไม่ถูกต้อง');if(p){p.value='';p.focus()}return}}
+  confirmName(n);
 }
 function confirmName(n){
   n=(n||'').trim();if(!n){toast('เลือกหรือพิมพ์ชื่อก่อน');return}
@@ -926,8 +934,9 @@ $('sheetBody').addEventListener('click',e=>{
   const s=sheetState;if(!s)return;const t=e.target;
   if(t.closest('#cancelBtn')){closeSheet();return}
   if(s.pickName){
-    const nb=t.closest('[data-name]');if(nb){s.sel=nb.dataset.name;document.querySelectorAll('[data-name]').forEach(x=>x.setAttribute('aria-pressed',x===nb));const ok=$('nmOk');ok.disabled=false;ok.textContent='ยืนยัน: '+s.sel;return}
-    if(t.closest('#nmOk'))confirmName(s.sel);return;
+    const nb=t.closest('[data-name]');if(nb){s.sel=nb.dataset.name;document.querySelectorAll('[data-name]').forEach(x=>x.setAttribute('aria-pressed',x===nb));const ok=$('nmOk');ok.disabled=false;ok.textContent='ยืนยัน: '+s.sel;
+      const adm=s.sel===ADMIN;$('pinBox').hidden=!adm;if(adm){$('pinIn').value='';setTimeout(()=>{const p=$('pinIn');if(p)p.focus()},30)}return}
+    if(t.closest('#nmOk'))tryConfirm(s.sel);return;
   }
   if(s.multi){const m=t.closest('[data-mh]');if(m){const h=s.hits[+m.dataset.mh];openProduct(h.p,h.ui,{bar:s.bar})}return}
   if(s.unknown){
@@ -955,6 +964,7 @@ $('sheetBody').addEventListener('keydown',e=>{
   if(e.key!=='Enter')return;
   if(e.target.id==='qtyIn'){e.preventDefault();saveEntry()}
   if(e.target.id==='nmIn'){e.preventDefault();confirmName(e.target.value)}
+  if(e.target.id==='pinIn'){e.preventDefault();tryConfirm(ADMIN)}
 });
 function setTab(t){tab=t;$('tabCount').hidden=t!=='count';$('tabSum').hidden=t!=='sum';$('tbCount').setAttribute('aria-selected',t==='count');$('tbSum').setAttribute('aria-selected',t==='sum');if(t==='sum')renderSum()}
 $('tbCount').onclick=()=>setTab('count');$('tbSum').onclick=()=>setTab('sum');
