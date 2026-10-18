@@ -1089,13 +1089,15 @@ $('tabDmg').addEventListener('click',async e=>{
       renderDmg();toast('ลบรายการชำรุดแล้ว')}catch(err){del.disabled=false;toast('ลบไม่สำเร็จ ลองใหม่')}
   }
 });
-function dmgRowsOut(){
-  const head=['วันที่','เวลา','คลัง','สาเหตุ','รหัสสินค้า','ชื่อสินค้า','จำนวน','หน่วย','รวมหน่วยเล็กสุด','หน่วยเล็กสุด','หมายเหตุ','คนบันทึก','รูป'];
+function dmgRowsOut(forFile){
+  const head=(forFile?['ตัวอย่างรูป']:[]).concat(['วันที่','เวลา','คลัง','สาเหตุ','รหัสสินค้า','ชื่อสินค้า','จำนวน','หน่วย','รวมหน่วยเล็กสุด','หน่วยเล็กสุด','หมายเหตุ','คนบันทึก','รูป 1','รูป 2','รูป 3','รูป 4','รูป 5','รูป 6']);
   if(dView==='sku'){
     const h=['คลัง','รหัสสินค้า','ชื่อสินค้า','ชำรุด (แยกหน่วย)','รวมหน่วยเล็กสุด','หน่วยเล็กสุด','จำนวนครั้ง','แยกตามสาเหตุ'];
     return [h].concat(dmgAgg().map(a=>[dScope==='all'?WH[a.wh]:WH[wh],a.c,a.nm,brk(a.c,a.base),Math.round(a.base*1000)/1000,a.bu,a.n,Object.entries(a.why).map(([k,v])=>k+' '+fmt(v)).join(', ')]));
   }
-  return [head].concat(dmgList.map(r=>{const d=new Date(r.t);return[r.date,d.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}),WH[r.wh]||r.wh,r.why,r.c,r.nm,r.q,r.u,Math.round((r.base||r.q*r.f)*1000)/1000,r.bu,r.note,r.n,(r.img||[]).map(id=>'https://drive.google.com/file/d/'+id+'/view').join(' ')]}));
+  return [head].concat(dmgList.map(r=>{const d=new Date(r.t);const im=(r.img||[]).slice(0,6);
+    return (forFile?[im[0]?'IMG:'+im[0]:'']:[]).concat([r.date,d.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}),WH[r.wh]||r.wh,r.why,r.c,r.nm,r.q,r.u,Math.round((r.base||r.q*r.f)*1000)/1000,r.bu,r.note,r.n],
+      im.map(id=>forFile?'LINK:'+id:'https://drive.google.com/file/d/'+id+'/view'))}));
 }
 $('dCopy').addEventListener('click',()=>{
   if(!dmgList.length){toast('ยังไม่มีรายการในช่วงนี้');return}
@@ -1109,9 +1111,9 @@ $('dXlsx').addEventListener('click',async()=>{
   const b=$('dXlsx');b.disabled=true;b.textContent='กำลังสร้างไฟล์…';
   const [a,z]=dRangeDates();
   try{
-    const r=await gs('exportDamage','สินค้าชำรุด '+(dScope==='all'?'ทุกคลัง':WH[wh])+' '+(a===z?a:a+' ถึง '+z),dmgRowsOut());
+    const r=await gs('exportDamage','สินค้าชำรุด '+(dScope==='all'?'ทุกคลัง':WH[wh])+' '+(a===z?a:a+' ถึง '+z),dmgRowsOut(true));
     fromScanner=false;sheetState={retry:true};
-    openSheet('<div class="pname" id="sheetTitle">ไฟล์สินค้าชำรุดพร้อมแล้ว</div><div class="hint">เก็บไว้ในโฟลเดอร์ “รีพอตนับสต็อก” ใน Google Drive ด้วย ลิงก์รูปอยู่คอลัมน์สุดท้าย</div>'+
+    openSheet('<div class="pname" id="sheetTitle">ไฟล์สินค้าชำรุดพร้อมแล้ว</div><div class="hint">เก็บไว้ในโฟลเดอร์ “รีพอตนับสต็อก” ใน Google Drive ด้วย ใน Google Sheets มีรูปตัวอย่างคอลัมน์แรก และกด “เปิดรูป” เพื่อดูรูปเต็มได้</div>'+
       '<a class="save" style="text-align:center;text-decoration:none" href="'+esc(r.xlsx)+'" target="_blank" rel="noopener">ดาวน์โหลด Excel (.xlsx)</a>'+
       '<a class="btn" style="text-align:center;text-decoration:none;color:inherit" href="'+esc(r.url)+'" target="_blank" rel="noopener">เปิดใน Google Sheets</a>'+
       '<div class="btnrow"><button class="btn" id="cancelBtn" type="button">ปิด</button></div>');
