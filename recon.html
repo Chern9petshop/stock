@@ -151,8 +151,9 @@ const P=RAW.map(([c,n,g,s,us])=>({c,n,g,s,units:us.map(([u,f,b])=>({u,f,b}))}));
 const byCode=new Map(),byCodeL=new Map(),byBar=new Map();
 P.forEach(p=>{byCode.set(p.c,p);byCodeL.set(p.c.toLowerCase(),p);p.units.forEach(u=>{if(u.b&&!byBar.has(u.b))byBar.set(u.b,{p,f:u.f})});p.key=(p.c+' '+p.n+' '+p.units.map(u=>u.b).join(' ')).toLowerCase()});
 const baseUnit=p=>p.units[0].u;
+function clean(v){return String(v==null?'':v).normalize('NFKC').replace(/[\u200B-\u200D\uFEFF\u00A0]/g,' ').replace(/^['"\s]+|['"\s]+$/g,'').trim()}
 function resolve(raw){
-  let k=String(raw==null?'':raw).trim().replace(/\.0+$/,'');if(!k)return null;
+  let k=clean(raw).replace(/\.0+$/,'');if(!k)return null;
   const p=byCode.get(k)||byCodeL.get(k.toLowerCase());if(p)return{p,f:1};
   const b=byBar.get(k)||byBar.get(k.replace(/^0+/,''))||byBar.get('0'+k);if(b)return b;
   return null;
@@ -205,7 +206,7 @@ function pickSheet(F,si){
 function whVals(F){const rows=F.sheets[F.si].rows.slice(F.hr+1);return[...new Set(rows.map(r=>String(r[F.cWh]||'').trim()).filter(Boolean))].slice(0,50)}
 function aggFile(F){
   const m=new Map(),unm=new Map(),by={};if(!F||F.cQty<0)return{m,unm,rows:0,by};
-  let rows=0;const cols=F.order.length?F.order:[F.cSku].filter(i=>i>=0);
+  let rows=0;const cols=[...new Set([...F.order,...F.idCols,...F.head.map((h,i)=>i)])].filter(i=>i!==F.cQty&&i!==F.cWh);
   F.sheets[F.si].rows.slice(F.hr+1).forEach(r=>{
     if(F.cWh>=0&&F.vWh&&String(r[F.cWh]||'').trim()!==F.vWh)return;
     const q=parseFloat(String(r[F.cQty]).replace(/,/g,''));if(isNaN(q))return;
