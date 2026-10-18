@@ -540,8 +540,9 @@ function renderResults(){
 /* ---------- sheet ---------- */
 let sheetState=null;let fromScanner=false;
 function openSheet(html){$('sheetBody').innerHTML='<div class="grab"></div>'+html;$('sheet').hidden=false;$('scrim').hidden=false}
-function closeSheet(){$('sheet').hidden=true;$('scrim').hidden=true;sheetState=null;if(fromScanner&&!$('scanner').hidden)resumeScan();else fromScanner=false}
+function closeSheet(){if(sheetState&&sheetState.forced)return;$('sheet').hidden=true;$('scrim').hidden=true;sheetState=null;if(fromScanner&&!$('scanner').hidden)resumeScan();else fromScanner=false}
 function openProduct(p,ui,opts={}){
+  if(needName())return;
   sheetState={p,ui:ui||0,q:opts.q!==undefined?opts.q:1,edit:opts.edit||null,bar:opts.bar||'',op:'add'};
   drawProduct();
   setTimeout(()=>{const i=$('qtyIn');if(i){i.focus();i.select()}},60);
@@ -882,21 +883,25 @@ paintDate();
 let counterDay=today();
 function paintCounter(){$('counterTxt').textContent=counter||'เลือกชื่อ';$('counterBtn').classList.toggle('locked',!!counter)}
 function curCounter(){rollDay();if(counterDay!==today()){counterDay=today();counter=ls.get('stk_counter_'+counterDay)||'';paintCounter()}return counter}
-function openNameSheet(after){
-  sheetState={pickName:true,after};
-  openSheet('<div class="pname" id="sheetTitle">ใครเป็นคนนับวันนี้</div><div class="hint">เลือกได้ครั้งเดียวต่อวัน ใช้กับทุกรายการที่บันทึกจากเครื่องนี้ และรีเซ็ตตอนเที่ยงคืน</div>'+
+function openNameSheet(after,forced){
+  if(forced&&sheetState&&sheetState.forced)return;
+  if(forced&&!$('scanner').hidden){try{closeScanner()}catch(e){}}
+  sheetState={pickName:true,after,forced:!!forced};
+  openSheet('<div class="pname" id="sheetTitle">ใครเป็นคนนับวันนี้</div><div class="hint">'+(forced?'<b>เลือกชื่อก่อนเริ่มนับ</b> ':'')+'เลือกได้ครั้งเดียวต่อวัน เปลี่ยนไม่ได้จนถึงเที่ยงคืน ใช้กับทุกรายการที่บันทึกจากเครื่องนี้</div>'+
     '<div class="units" style="grid-template-columns:repeat(3,1fr)">'+names.map(n=>'<button class="unit" type="button" data-name="'+esc(n)+'" aria-pressed="false" style="text-align:center;padding:12px 6px"><b>'+esc(n)+'</b></button>').join('')+'</div>'+
-    '<button class="save" id="nmOk" type="button" disabled>เลือกชื่อก่อน</button><div class="btnrow"><button class="btn" id="cancelBtn" type="button">ยกเลิก</button></div>');
+    '<button class="save" id="nmOk" type="button" disabled>เลือกชื่อก่อน</button>'+(forced?'':'<div class="btnrow"><button class="btn" id="cancelBtn" type="button">ยกเลิก</button></div>'));
 }
 function confirmName(n){
   n=(n||'').trim();if(!n){toast('เลือกหรือพิมพ์ชื่อก่อน');return}
   counter=n;counterDay=today();ls.set('stk_counter_'+counterDay,n);paintCounter();rememberName(n);
   const a=sheetState&&sheetState.after;closeSheetQuiet();if(a)a();
+  try{$('q').focus()}catch(e){}
   toast('คนนับวันนี้: '+n);
 }
 $('counterBtn').onclick=()=>{if(curCounter())toast('วันนี้นับในชื่อ '+counter+' เปลี่ยนได้หลังเที่ยงคืน');else{fromScanner=false;openNameSheet(null)}};
-(function midnight(){const n=new Date();const m=new Date(n.getFullYear(),n.getMonth(),n.getDate()+1,0,0,2);setTimeout(()=>{curCounter();midnight()},m-n)})();
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)curCounter()});
+function needName(){if(!curCounter()){fromScanner=false;openNameSheet(null,true);return true}return false}
+(function midnight(){const n=new Date();const m=new Date(n.getFullYear(),n.getMonth(),n.getDate()+1,0,0,2);setTimeout(()=>{needName();midnight()},m-n)})();
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)needName()});
 paintCounter();
 if(window.visualViewport){const vv=window.visualViewport;const fit=()=>{const kb=Math.max(0,window.innerHeight-vv.height-vv.offsetTop);const sh=$('sheet');sh.style.bottom=kb+'px';sh.style.maxHeight=Math.round(vv.height*0.94)+'px'};vv.addEventListener('resize',fit);vv.addEventListener('scroll',fit)}
 let wakeLock=null;async function keepAwake(){try{if(!wakeLock&&'wakeLock' in navigator&&document.visibilityState==='visible'){wakeLock=await navigator.wakeLock.request('screen');wakeLock.addEventListener('release',()=>{wakeLock=null})}}catch(e){}}
@@ -914,7 +919,7 @@ $('log').addEventListener('click',e=>{
   const p=byCode.get(en.c);if(!p)return;let ui=p.units.findIndex(u=>u.u===en.u&&u.f===en.f);if(ui<0)ui=0;
   fromScanner=false;openProduct(p,ui,{q:en.q,edit:en.i});
 });
-$('scanBtn').onclick=()=>{if(camBlocked){fromScanner=false;$('photoIn').click();return}openScanner()};$('scanClose').onclick=closeScanner;
+$('scanBtn').onclick=()=>{if(needName())return;if(camBlocked){fromScanner=false;$('photoIn').click();return}openScanner()};$('scanClose').onclick=closeScanner;
 $('scrim').onclick=closeSheet;
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('sheet').hidden)closeSheet();else if(!$('scanner').hidden)closeScanner()}});
 $('sheetBody').addEventListener('click',e=>{
@@ -957,6 +962,7 @@ $('filters').addEventListener('click',e=>{const b=e.target.closest('[data-f]');i
 $('sq').addEventListener('input',()=>renderSum());
 if(!WH[wh])wh='CM';paintWh();
 init();
+needName();
 </script>
 
 </body>
