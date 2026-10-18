@@ -272,7 +272,7 @@ textarea{width:100%;min-height:120px;border:1px solid var(--line);border-radius:
   </section>
 
   <section class="panel" id="tabDmg" hidden>
-    <div class="dmghead"><span class="t">บันทึกสินค้าชำรุด</span><span class="hint" style="margin:0">ของเสียจากกระสอบ / บนรถ · ต้องถ่ายรูปทุกครั้ง · หักออกจากยอดระบบให้อัตโนมัติ</span></div>
+    <div class="dmghead"><span class="t">บันทึกสินค้าชำรุด</span><span class="hint" style="margin:0">ของเสียจากกระสอบ / บนรถ · ต้องถ่ายรูปทุกครั้ง · ดึงรีพอตไปใช้เทียบสต็อกได้</span></div>
     <div class="searchbar">
       <input id="dq" class="field" type="search" inputmode="search" placeholder="สแกน หรือพิมพ์ บาร์โค้ด / รหัส / ชื่อ" autocomplete="off" enterkeyhint="search" aria-label="ค้นหาสินค้าชำรุด">
       <button class="scanbtn" id="dScanBtn" type="button" aria-label="สแกนด้วยกล้อง" style="background:var(--bad);border-color:var(--bad)">
@@ -553,8 +553,8 @@ function sumRows(T){
   const codes=new Set([...T.keys(),...(sysOn?Object.keys(system):[])]);
   codes.forEach(c=>{
     const p=byCode.get(c);const t=T.get(c);const dm=damage[c]||0;const sv0=system[c];
-    const counted=t?t.base:0;const has=sv0!==undefined&&sv0!==null;const sv=has?Math.round((sv0-dm)*1000)/1000:null;
-    rows.push({c,p,t,counted,sys:sv,dmg:has?dm:0,diff:has?Math.round((counted-sv)*1000)/1000:null,status:!t?'uncounted':(has?(counted-sv===0?'match':'diff'):'nosys')});
+    const counted=t?t.base:0;const has=sv0!==undefined&&sv0!==null;const sv=has?sv0:null;
+    rows.push({c,p,t,counted,sys:sv,dmg:0,diff:has?Math.round((counted-sv)*1000)/1000:null,status:!t?'uncounted':(has?(counted-sv===0?'match':'diff'):'nosys')});
   });
   rows.sort((a,b)=>((a.p?a.p.g:'zz').localeCompare(b.p?b.p.g:'zz','th'))||((a.p?a.p.n:a.c).localeCompare(b.p?b.p.n:b.c,'th')));
   return rows;
@@ -846,8 +846,8 @@ $('imgIn').addEventListener('change',async e=>{
 /* ---------- export ---------- */
 function exportRows(){
   const rows=sumRows(totals());
-  const head=['คลัง','วันที่','รหัสสินค้า','ชื่อสินค้า','หน่วยเล็กสุด','นับได้ (รายละเอียด)','นับได้รวม','ยอดระบบ (หักชำรุดแล้ว)','ชำรุดที่หัก','ผลต่าง'];
-  return [head].concat(rows.map(r=>[WH[wh],date,r.c,r.p?r.p.n:'',r.p?baseUnit(r.p):'',r.t?breakdown(r.t):'',r.t?r.counted:0,r.sys===null?'':r.sys,r.dmg||'',r.diff===null?'':r.diff]));
+  const head=['คลัง','วันที่','รหัสสินค้า','ชื่อสินค้า','หน่วยเล็กสุด','นับได้ (รายละเอียด)','นับได้รวม','ยอดระบบ','ผลต่าง'];
+  return [head].concat(rows.map(r=>[WH[wh],date,r.c,r.p?r.p.n:'',r.p?baseUnit(r.p):'',r.t?breakdown(r.t):'',r.t?r.counted:0,r.sys===null?'':r.sys,r.diff===null?'':r.diff]));
 }
 $('copyBtn').addEventListener('click',()=>{
   const txt=exportRows().map(r=>r.map(v=>String(v).replace(/[\t\n]/g,' ')).join('\t')).join('\n');
@@ -871,10 +871,10 @@ function sheetRows(w,data){
   const T=new Map();
   data.entries.forEach(e=>T.set(e.c,(T.get(e.c)||0)+e.q*e.f));
   const sys0=data.system||{},dmg=data.damage||{};const sysOn=Object.keys(sys0).length>0;
-  const sys={};Object.keys(sys0).forEach(c=>sys[c]=Math.round((sys0[c]-(dmg[c]||0))*1000)/1000);
+  const sys=sys0;
   const codes=[...new Set([...T.keys(),...Object.keys(sys)])].map(c=>({c,p:byCode.get(c)}));
   codes.sort((a,b)=>((a.p?a.p.g:'zz').localeCompare(b.p?b.p.g:'zz','th'))||((a.p?a.p.n:a.c).localeCompare(b.p?b.p.n:b.c,'th')));
-  const head=['หมวด','รหัสสินค้า','ชื่อสินค้า','ลัง / หน่วยใหญ่','หน่วย','โหล / หน่วยกลาง','หน่วย','หน่วยเล็ก','หน่วย','รวม (หน่วยเล็กสุด)'].concat(sysOn?['ยอดระบบ (หักชำรุดแล้ว)','ผลต่าง']:[]);
+  const head=['หมวด','รหัสสินค้า','ชื่อสินค้า','ลัง / หน่วยใหญ่','หน่วย','โหล / หน่วยกลาง','หน่วย','หน่วยเล็ก','หน่วย','รวม (หน่วยเล็กสุด)'].concat(sysOn?['ยอดระบบ','ผลต่าง']:[]);
   const rows=[['คลัง: '+WH[w]+'   วันที่นับ: '+date.split('-').reverse().join('/')],head];
   codes.forEach(({c,p})=>{
     const base=Math.round((T.get(c)||0)*1000)/1000;
@@ -962,7 +962,7 @@ function drawShots(){
 function dmgConv(){
   const s=sheetState;if(!s||!s.dmg)return;const u=s.p.units[s.ui];const q=parseFloat(($('qtyIn')||{}).value)||0;s.q=q;
   const bu=baseUnit(s.p);
-  $('conv').innerHTML='ชำรุด <b>'+fmt(q)+' '+esc(u.u)+'</b>'+(u.f>1?' (= <b>'+fmt(q*u.f)+'</b> '+esc(bu)+')':'')+' · จะหักออกจากยอดระบบ '+esc(WH[wh]);
+  $('conv').innerHTML='ชำรุด <b>'+fmt(q)+' '+esc(u.u)+'</b>'+(u.f>1?' (= <b>'+fmt(q*u.f)+'</b> '+esc(bu)+')':'')+' · คลัง'+esc(WH[wh]);
   const b=$('dSave');if(!b)return;
   b.disabled=s.busy||!(q>0)||!s.photos.length;
   b.textContent=s.busy?'กำลังอัปโหลดรูป…':(!s.photos.length?'ถ่ายรูปก่อนบันทึก':'บันทึกชำรุด −'+fmt(q)+' '+u.u);
