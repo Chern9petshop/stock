@@ -193,8 +193,11 @@ function pickSheet(F,si){
   F.si=si;const rows=F.sheets[si].rows;let hr=0;
   for(let i=0;i<Math.min(15,rows.length);i++){if(rows[i].some(c=>RX.sku.test(String(c)))){hr=i;break}}
   F.hr=hr;F.head=(rows[hr]||[]).map((h,i)=>String(h||('คอลัมน์ '+(i+1))).trim());
-  F.cSku=guess(F.head,RX.sku);
-  const pref=F.kind==='bs'?/available|พร้อมขาย|คงเหลือ|คงคลัง|on.?hand/i:/จำนวน|qty|quantity/i;
+  /* เลือกคอลัมน์รหัสจากคอลัมน์ที่จับคู่กับไฟล์สินค้าได้มากที่สุด */
+  const body=rows.slice(hr+1,hr+401);let best=-1,bh=0;
+  F.head.forEach((h,i)=>{let n=0;body.forEach(r=>{if(resolve(r[i]))n++});if(n>bh){bh=n;best=i}});
+  F.cSku=best>=0?best:guess(F.head,RX.sku);
+  const pref=F.kind==='bs'?/ที่มีอยู่|available|พร้อมขาย|คงเหลือ|คงคลัง|on.?hand/i:/จำนวน|qty|quantity/i;
   F.cQty=guess(F.head,pref,F.cSku);if(F.cQty<0)F.cQty=guess(F.head,RX.qty,F.cSku);
   F.cWh=guess(F.head,RX.wh,-1);F.vWh='';
   if(F.cWh>=0){const vals=whVals(F);const hit=vals.find(v=>v.includes(WH[wh]));F.vWh=hit||''}
