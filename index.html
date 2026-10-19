@@ -588,7 +588,7 @@ function renderResults(){
   if(!r.length){box.innerHTML='<div class="res" style="cursor:default"><span class="nm">ไม่พบสินค้า “'+esc(q)+'”</span></div>';box.hidden=false;return}
   box.innerHTML=r.map(p=>{const t=T.get(p.c);
     const iu=imgUrl(p.c);
-    return '<button class="res wi" type="button" data-code="'+esc(p.c)+'">'+(iu?'<img class="thumb" src="'+iu+'" alt="" loading="lazy" onerror="this.style.visibility=\'hidden\'">':'<span class="thumb"></span>')+'<span class="nm">'+esc(p.n)+'</span><span class="meta"><span class="mono">'+esc(p.c)+'</span><span>'+esc(p.units.map(u=>u.u+(u.f>1?' ×'+fmt(u.f):'')).join(' / '))+'</span></span>'+
+    return '<button class="res wi" type="button" data-code="'+esc(p.c)+'">'+(iu?'<img class="thumb" src="'+iu+'" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.visibility=\'hidden\'">':'<span class="thumb"></span>')+'<span class="nm">'+esc(p.n)+'</span><span class="meta"><span class="mono">'+esc(p.c)+'</span><span>'+esc(p.units.map(u=>u.u+(u.f>1?' ×'+fmt(u.f):'')).join(' / '))+'</span></span>'+
     (t?'<span class="got">นับแล้ว<br>'+fmt(t.base)+' '+esc(baseUnit(p))+'</span>':'')+'</button>'}).join('');
   box.hidden=false;
 }
@@ -1010,7 +1010,7 @@ function renderDResults(){
   if(!q){box.hidden=true;return}
   const r=search(q);
   box.innerHTML=r.length?r.map(p=>{const iu=imgUrl(p.c);
-    return '<button class="res wi" type="button" data-dcode="'+esc(p.c)+'">'+(iu?'<img class="thumb" src="'+iu+'" alt="" loading="lazy" onerror="this.style.visibility=\'hidden\'">':'<span class="thumb"></span>')+'<span class="nm">'+esc(p.n)+'</span><span class="meta"><span class="mono">'+esc(p.c)+'</span><span>'+esc(p.units.map(u=>u.u+(u.f>1?' ×'+fmt(u.f):'')).join(' / '))+'</span></span></button>'}).join('')
+    return '<button class="res wi" type="button" data-dcode="'+esc(p.c)+'">'+(iu?'<img class="thumb" src="'+iu+'" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.visibility=\'hidden\'">':'<span class="thumb"></span>')+'<span class="nm">'+esc(p.n)+'</span><span class="meta"><span class="mono">'+esc(p.c)+'</span><span>'+esc(p.units.map(u=>u.u+(u.f>1?' ×'+fmt(u.f):'')).join(' / '))+'</span></span></button>'}).join('')
     :'<div class="res" style="cursor:default"><span class="nm">ไม่พบสินค้า “'+esc(q)+'”</span></div>';
   box.hidden=false;
 }
