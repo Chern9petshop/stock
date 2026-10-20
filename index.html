@@ -941,7 +941,7 @@ $('sysClear').addEventListener('click',async()=>{
 /* ---------- สินค้าชำรุด / สินค้าตีกลับ ---------- */
 const KD={
   dmg:{label:'ชำรุด',head:'บันทึกสินค้าชำรุด',sub:'ของเสียจากกระสอบ / บนรถ · ต้องถ่ายรูปทุกครั้ง',why:['จากกระสอบ','บนรถ','อื่นๆ'],whyLabel:'สาเหตุ',add:'addDamage',list:'listDamage',del:'deleteDamage',pre:'D',sign:'−',photoLabel:'รูปความเสียหาย',note:'หมายเหตุ (ถ้ามี) เช่น ถุงขาด ซองรั่ว เปียกน้ำ'},
-  ret:{label:'ตีกลับ',head:'บันทึกสินค้าตีกลับ',sub:'พัสดุตีกลับจากลูกค้า/ขนส่ง · สแกนเลขคำสั่งซื้อหรือแทรค · ต้องถ่ายรูปทุกครั้ง',why:['สภาพดี','เสียหาย'],whyLabel:'สภาพสินค้า',add:'addReturn',list:'listReturn',del:'deleteReturn',pre:'R',sign:'+',photoLabel:'รูปสินค้า/พัสดุที่ตีกลับ',note:'หมายเหตุ (ถ้ามี) เช่น ลูกค้าปฏิเสธรับ ที่อยู่ผิด'}
+  ret:{label:'ตีกลับ',head:'รับเข้าสินค้าตีกลับ',sub:'พัสดุตีกลับจากลูกค้า/ขนส่ง · สแกนเลขคำสั่งซื้อหรือแทรค · ดึงรีพอตไปเพิ่มสต็อกใน BigSeller',why:['รับเข้า'],whyLabel:'',noPhoto:true,add:'addReturn',list:'listReturn',del:'deleteReturn',pre:'R',sign:'+',photoLabel:'รูปสินค้า/พัสดุที่ตีกลับ',note:'หมายเหตุ (ถ้ามี) เช่น ลูกค้าปฏิเสธรับ ที่อยู่ผิด'}
 };
 let dk='dmg';const lists={dmg:[],ret:[]};
 let dmgList=lists.dmg,dRange='today',dScope='wh',dView='list',dLoading=false,dErr='';
@@ -968,19 +968,19 @@ function drawDamage(){
     '<div><div class="pname" id="sheetTitle"><span class="wtag'+(s.kind==='ret'?' ret':'')+'" style="vertical-align:3px;margin-right:6px">'+K.label+'</span>'+esc(p.n)+'</div><div class="pmeta"><span class="mono">'+esc(p.c)+'</span><span>'+esc(WH[wh])+'</span>'+(s.bar?'<span>สแกน <span class="mono">'+esc(s.bar)+'</span></span>':'')+'</div></div>'+
     (s.kind==='ret'?'<div class="hint" style="margin:0">เลขคำสั่งซื้อ / เลขแทรค</div><div class="searchbar"><input id="dOrd" class="field" placeholder="สแกนหรือพิมพ์เลขคำสั่งซื้อ/แทรค" value="'+esc(s.ord)+'" autocomplete="off" style="font-size:16px;padding:11px"><button class="scanbtn" id="ordScan" type="button" aria-label="สแกนเลขคำสั่งซื้อ">'+scanSvg+'สแกน</button></div>':'')+
     '<div class="hint" style="margin:0">บริษัทของสินค้า</div><input id="dCo" class="field" list="coList" placeholder="เช่น บลูฟาโล่ เพ็ทแคร์" value="'+esc(s.co)+'" autocomplete="off" style="background:var(--surface);font-size:16px;padding:11px;width:100%"><datalist id="coList">'+knownCos().map(c=>'<option value="'+esc(c)+'">').join('')+'</datalist>'+
-    '<div class="hint" style="margin:0">'+K.whyLabel+'</div><div class="why" role="group" aria-label="'+K.whyLabel+'" style="grid-template-columns:repeat('+K.why.length+',1fr)">'+K.why.map(w=>'<button type="button" data-why="'+esc(w)+'" aria-pressed="'+(s.why===w)+'">'+esc(w)+'</button>').join('')+'</div>'+
+    (K.why.length<2?'':'<div class="hint" style="margin:0">'+K.whyLabel+'</div><div class="why" role="group" aria-label="'+K.whyLabel+'" style="grid-template-columns:repeat('+K.why.length+',1fr)">'+K.why.map(w=>'<button type="button" data-why="'+esc(w)+'" aria-pressed="'+(s.why===w)+'">'+esc(w)+'</button>').join('')+'</div>')+
     '<div class="units" role="group" aria-label="หน่วย">'+p.units.map((x,i)=>'<button class="unit" type="button" data-dui="'+i+'" aria-pressed="'+(i===s.ui)+'"><b>'+esc(x.u)+'</b><span>'+(x.f>1?'= '+fmt(x.f)+' '+esc(bu):'หน่วยเล็กสุด')+'</span></button>').join('')+'</div>'+
     '<div class="stepper"><button type="button" id="qMinus" aria-label="ลด">−</button><input id="qtyIn" type="number" inputmode="decimal" min="0" step="any" value="'+s.q+'" aria-label="จำนวน"><button type="button" id="qPlus" aria-label="เพิ่ม">+</button></div>'+
     '<div class="conv" id="conv"></div>'+
-    '<div class="hint" style="margin:0">'+K.photoLabel+' (ต้องมีอย่างน้อย 1 รูป สูงสุด 6 รูป)</div>'+
-    '<div class="shots" id="shots"></div>'+
+    (K.noPhoto?'':'<div class="hint" style="margin:0">'+K.photoLabel+' (ต้องมีอย่างน้อย 1 รูป สูงสุด 6 รูป)</div>'+
+    '<div class="shots" id="shots"></div>')+
     '<input id="dNote" class="field" placeholder="'+esc(K.note)+'" value="'+esc(s.note)+'" style="background:var(--surface);font-size:16px;padding:11px;width:100%">'+
     '<button class="save" id="dSave" type="button" style="background:var(--bad);border-color:var(--bad)"></button>'+
     '<div class="btnrow"><button class="btn" id="cancelBtn" type="button">ยกเลิก</button></div>');
   drawShots();dmgConv();
 }
 function drawShots(){
-  const s=sheetState;if(!s||!s.dmg)return;
+  const s=sheetState;if(!s||!s.dmg)return;if(!$('shots')){dmgConv();return}
   $('shots').innerHTML=s.photos.map((ph,i)=>'<div class="shot"><img src="'+ph.url+'" alt="รูปที่ '+(i+1)+'"><button type="button" data-rmph="'+i+'" aria-label="ลบรูป">×</button></div>').join('')+
     (s.photos.length<6?'<label class="shotadd" for="dmgCam">'+camSvg+'ถ่ายรูป</label>'+(s.photos.length?'':'<label class="shotadd alt" for="dmgGal">เลือกจาก<br>คลังรูป</label>'):'');
   dmgConv();
@@ -991,8 +991,9 @@ function dmgConv(){
   $('conv').innerHTML=K.label+' <b>'+fmt(q)+' '+esc(u.u)+'</b>'+(u.f>1?' (= <b>'+fmt(q*u.f)+'</b> '+esc(bu)+')':'')+' · คลัง'+esc(WH[wh]);
   const b=$('dSave');if(!b)return;
   const needOrd=s.kind==='ret'&&!String(s.ord||'').trim();
-  b.disabled=s.busy||!(q>0)||!s.photos.length||needOrd;
-  b.textContent=s.busy?'กำลังอัปโหลดรูป…':(needOrd?'ใส่เลขคำสั่งซื้อ/แทรคก่อน':(!s.photos.length?'ถ่ายรูปก่อนบันทึก':'บันทึก'+K.label+' '+K.sign+fmt(q)+' '+u.u));
+  const needPh=!K.noPhoto&&!s.photos.length;
+  b.disabled=s.busy||!(q>0)||needPh||needOrd;
+  b.textContent=s.busy?(K.noPhoto?'กำลังบันทึก…':'กำลังอัปโหลดรูป…'):(needOrd?'ใส่เลขคำสั่งซื้อ/แทรคก่อน':(needPh?'ถ่ายรูปก่อนบันทึก':(s.kind==='ret'?'รับเข้า':'บันทึก'+K.label)+' '+K.sign+fmt(q)+' '+u.u));
 }
 async function addShots(files){
   const s=sheetState;if(!s||!s.dmg)return;
@@ -1020,7 +1021,7 @@ function dmgInput(e){const s=sheetState;const id=e.target.id;
 async function saveDamage(){
   const s=sheetState;if(!s||!s.dmg||s.busy)return;const K=KD[s.kind];
   if(!curCounter()){openNameSheet(null,true);return}
-  const u=s.p.units[s.ui];const q=s.q;if(!(q>0)||!s.photos.length)return;
+  const u=s.p.units[s.ui];const q=s.q;if(!(q>0)||(!K.noPhoto&&!s.photos.length))return;
   if(s.kind==='ret'&&!String(s.ord||'').trim())return;
   const co=String(s.co||'').trim();
   const rec={i:K.pre+Date.now().toString(36)+Math.random().toString(36).slice(2,6),t:Date.now(),date,wh,why:s.why,c:s.p.c,nm:s.p.n,u:u.u,f:u.f,q,bu:baseUnit(s.p),note:(s.note||'').trim(),n:counter,co,ord:String(s.ord||'').trim()};
@@ -1090,7 +1091,7 @@ function dentHTML(r){
   const K=KD[dk];const th=id=>/^https?:\/\//.test(id)?id:'https://drive.google.com/thumbnail?id='+encodeURIComponent(id)+'&sz=w400';
   const tm=new Date(r.t).toLocaleString('th-TH',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
   return '<div class="dent">'+(r.img&&r.img[0]?'<img class="ph" src="'+th(r.img[0])+'" alt="" loading="lazy" referrerpolicy="no-referrer" data-big="'+esc(r.img[0])+'">':'<span class="ph"></span>')+
-    '<div style="min-width:0"><div class="nm">'+esc(r.nm||r.c)+'</div><div class="meta"><span class="wtag'+(dk==='ret'?' ret':'')+'">'+esc(r.why)+'</span><span class="mono">'+esc(r.c)+'</span>'+(dScope==='all'?'<span>'+esc(WH[r.wh]||r.wh)+'</span>':'')+'<span>'+esc(r.n||'')+' · '+tm+'</span></div>'+
+    '<div style="min-width:0"><div class="nm">'+esc(r.nm||r.c)+'</div><div class="meta">'+(dk==='ret'?'':'<span class="wtag">'+esc(r.why)+'</span>')+'<span class="mono">'+esc(r.c)+'</span>'+(dScope==='all'?'<span>'+esc(WH[r.wh]||r.wh)+'</span>':'')+'<span>'+esc(r.n||'')+' · '+tm+'</span></div>'+
     (r.ord?'<div class="meta">เลขคำสั่งซื้อ/แทรค <span class="mono" style="color:var(--ink)">'+esc(r.ord)+'</span></div>':'')+
     '<div class="meta">บริษัท: '+esc(recCo(r))+'</div>'+
     (r.note?'<div class="meta">“'+esc(r.note)+'”</div>':'')+
@@ -1108,7 +1109,7 @@ function renderDmg(){
   $('dView').innerHTML=[['list','ทีละรายการ (มีรูป)'],['sku','รวมตามสินค้า'],['co','แยกตามบริษัท']].map(([k,l])=>'<button class="chip" type="button" data-dv="'+k+'" aria-pressed="'+(dView===k)+'">'+l+'</button>').join('');
   $('dXlsx').textContent=dView==='co'?'ส่งออก Excel แยกบริษัท':'ส่งออก Excel';
   const ag=dmgAgg();const byWhy={};dmgList.forEach(r=>byWhy[r.why]=(byWhy[r.why]||0)+1);
-  $('dStats').innerHTML='<div class="stat"><b>'+dmgList.length+'</b><span>ครั้งที่บันทึก</span></div><div class="stat"><b>'+ag.length+'</b><span>สินค้า (SKU)</span></div><div class="stat"><b style="font-size:15px;line-height:1.5">'+(Object.entries(byWhy).map(([k,v])=>esc(k)+' '+v).join('<br>')||'–')+'</b><span>แยกตาม'+K.whyLabel+'</span></div>';
+  $('dStats').innerHTML='<div class="stat"><b>'+dmgList.length+'</b><span>ครั้งที่บันทึก</span></div><div class="stat"><b>'+ag.length+'</b><span>สินค้า (SKU)</span></div>'+(dk==='ret'?'<div class="stat"><b>'+new Set(dmgList.map(r=>r.ord).filter(Boolean)).size+'</b><span>พัสดุ (เลขคำสั่งซื้อ)</span></div>':'<div class="stat"><b style="font-size:15px;line-height:1.5">'+(Object.entries(byWhy).map(([k,v])=>esc(k)+' '+v).join('<br>')||'–')+'</b><span>แยกตาม'+K.whyLabel+'</span></div>');
   const out=$('dOut');
   if(mode!=='gas'){out.innerHTML='<div class="empty">ดูรีพอตได้เมื่อเปิดผ่านลิงก์เว็บและต่อเน็ต</div>';return}
   if(dLoading&&!dmgList.length){out.innerHTML='<div class="empty">กำลังโหลด…</div>';return}
@@ -1116,7 +1117,7 @@ function renderDmg(){
   if(!dmgList.length){out.innerHTML='<div class="empty">ยังไม่มีสินค้า'+K.label+'ในช่วงนี้<br>สแกนหรือค้นหาสินค้าด้านบนเพื่อบันทึก</div>';return}
   if(dView==='sku'){
     out.innerHTML='<div class="tablewrap"><table class="dsum"><thead><tr><th>สินค้า</th><th>'+K.label+'</th><th class="n">รวม (หน่วยเล็ก)</th></tr></thead><tbody>'+
-      ag.map(a=>'<tr><td><span>'+esc(a.nm||a.c)+'</span><span class="sub mono">'+esc(a.c)+'</span><span class="sub">'+(dScope==='all'?esc(WH[a.wh]||a.wh)+' · ':'')+esc(a.co)+' · '+Object.entries(a.why).map(([k,v])=>esc(k)+' '+fmt(v)).join(' · ')+' · '+a.n+' ครั้ง</span></td>'+
+      ag.map(a=>'<tr><td><span>'+esc(a.nm||a.c)+'</span><span class="sub mono">'+esc(a.c)+'</span><span class="sub">'+(dScope==='all'?esc(WH[a.wh]||a.wh)+' · ':'')+esc(a.co)+(dk==='ret'?'':' · '+Object.entries(a.why).map(([k,v])=>esc(k)+' '+fmt(v)).join(' · '))+' · '+a.n+' ครั้ง</span></td>'+
         '<td>'+esc(brk(a.c,a.base))+'</td><td class="n"><b>'+fmt(a.base)+'</b> '+esc(a.bu)+'</td></tr>').join('')+'</tbody></table></div>';
     return;
   }
@@ -1147,13 +1148,14 @@ $('tabDmg').addEventListener('click',async e=>{
 function dmgRowsOut(forFile,list,view){
   const K=KD[dk];list=list||dmgList;view=view||dView;
   if(view==='sku'){
-    const h=['คลัง','บริษัท','รหัสสินค้า','ชื่อสินค้า',K.label+' (แยกหน่วย)','รวมหน่วยเล็กสุด','หน่วยเล็กสุด','จำนวนครั้ง','แยกตาม'+K.whyLabel];
-    return [h].concat(dmgAgg(list).map(a=>[dScope==='all'?WH[a.wh]:WH[wh],a.co,a.c,a.nm,brk(a.c,a.base),Math.round(a.base*1000)/1000,a.bu,a.n,Object.entries(a.why).map(([k,v])=>k+' '+fmt(v)).join(', ')]));
+    const h=['คลัง','บริษัท','รหัสสินค้า','ชื่อสินค้า',(dk==='ret'?'รับเข้า':K.label)+' (แยกหน่วย)','รวมหน่วยเล็กสุด','หน่วยเล็กสุด','จำนวนครั้ง'].concat(dk==='ret'?[]:['แยกตาม'+K.whyLabel]);
+    return [h].concat(dmgAgg(list).map(a=>[dScope==='all'?WH[a.wh]:WH[wh],a.co,a.c,a.nm,brk(a.c,a.base),Math.round(a.base*1000)/1000,a.bu,a.n].concat(dk==='ret'?[]:[Object.entries(a.why).map(([k,v])=>k+' '+fmt(v)).join(', ')])));
   }
-  const head=(forFile?['ตัวอย่างรูป']:[]).concat(['วันที่','เวลา','คลัง','บริษัท'],dk==='ret'?['เลขคำสั่งซื้อ/แทรค']:[],[K.whyLabel,'รหัสสินค้า','ชื่อสินค้า','จำนวน','หน่วย','รวมหน่วยเล็กสุด','หน่วยเล็กสุด','หมายเหตุ','คนบันทึก','รูป 1','รูป 2','รูป 3','รูป 4','รูป 5','รูป 6']);
+  const ph=!K.noPhoto;
+  const head=(forFile&&ph?['ตัวอย่างรูป']:[]).concat(['วันที่','เวลา','คลัง','บริษัท'],dk==='ret'?['เลขคำสั่งซื้อ/แทรค']:[K.whyLabel],['รหัสสินค้า','ชื่อสินค้า','จำนวน','หน่วย','รวมหน่วยเล็กสุด','หน่วยเล็กสุด','หมายเหตุ','คนบันทึก'],ph?['รูป 1','รูป 2','รูป 3','รูป 4','รูป 5','รูป 6']:[]);
   return [head].concat(list.map(r=>{const d=new Date(r.t);const im=(r.img||[]).slice(0,6);
-    return (forFile?[im[0]?'IMG:'+im[0]:'']:[]).concat([r.date,d.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}),WH[r.wh]||r.wh,recCo(r)],dk==='ret'?[r.ord||'']:[],[r.why,r.c,r.nm,r.q,r.u,Math.round((r.base||r.q*r.f)*1000)/1000,r.bu,r.note,r.n],
-      im.map(id=>forFile?'LINK:'+id:(/^https?:\/\//.test(id)?id:'https://drive.google.com/file/d/'+id+'/view')))}));
+    return (forFile&&ph?[im[0]?'IMG:'+im[0]:'']:[]).concat([r.date,d.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'}),WH[r.wh]||r.wh,recCo(r)],dk==='ret'?[r.ord||'']:[r.why],[r.c,r.nm,r.q,r.u,Math.round((r.base||r.q*r.f)*1000)/1000,r.bu,r.note,r.n],
+      (ph?im:[]).map(id=>forFile?'LINK:'+id:(/^https?:\/\//.test(id)?id:'https://drive.google.com/file/d/'+id+'/view')))}));
 }
 function copyRows(rows){
   if(rows.length<2){toast('ยังไม่มีรายการในช่วงนี้');return}
@@ -1175,7 +1177,7 @@ async function exportDmg(onlyCo){
   try{
     const r=await gs('exportBook',title,sheets);$('toast').hidden=true;
     fromScanner=false;sheetState={retry:true};
-    openSheet('<div class="pname" id="sheetTitle">ไฟล์สินค้า'+K.label+'พร้อมแล้ว</div><div class="hint">'+(sheets.length>1?'แยกชีทตามบริษัท '+sheets.length+' ชีท · ':'')+'เก็บไว้ในโฟลเดอร์ “รีพอตนับสต็อก” ใน Google Drive ด้วย ใน Google Sheets มีรูปตัวอย่างคอลัมน์แรก และกด “เปิดรูป” เพื่อดูรูปเต็มได้</div>'+
+    openSheet('<div class="pname" id="sheetTitle">ไฟล์สินค้า'+K.label+'พร้อมแล้ว</div><div class="hint">'+(sheets.length>1?'แยกชีทตามบริษัท '+sheets.length+' ชีท · ':'')+(K.noPhoto?'ใช้ “รวมตามสินค้า” เพื่อได้ยอดรวมต่อ SKU ไปเพิ่มสต็อกใน BigSeller':'เก็บไว้ในโฟลเดอร์ “รีพอตนับสต็อก” ใน Google Drive ด้วย ใน Google Sheets มีรูปตัวอย่างคอลัมน์แรก และกด “เปิดรูป” เพื่อดูรูปเต็มได้')+'</div>'+
       '<a class="save" style="text-align:center;text-decoration:none" href="'+esc(r.xlsx)+'" target="_blank" rel="noopener">ดาวน์โหลด Excel (.xlsx)</a>'+
       '<a class="btn" style="text-align:center;text-decoration:none;color:inherit" href="'+esc(r.url)+'" target="_blank" rel="noopener">เปิดใน Google Sheets</a>'+
       '<div class="btnrow"><button class="btn" id="cancelBtn" type="button">ปิด</button></div>');
