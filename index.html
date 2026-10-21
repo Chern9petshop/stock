@@ -294,6 +294,7 @@ textarea{width:100%;min-height:120px;border:1px solid var(--line);border-radius:
     <div class="btnrow">
       <button class="btn primary" id="dCopy" type="button">คัดลอกไปวางใน Sheet</button>
       <button class="btn" id="dXlsx" type="button">ส่งออก Excel</button>
+      <button class="btn" id="dFillCo" type="button" hidden>เติมบริษัทย้อนหลังลง Sheet</button>
     </div>
   </section>
 </main>
@@ -1108,6 +1109,7 @@ function renderDmg(){
     '<span class="hint" style="margin:0 0 0 4px">'+(([a,b])=>a===b?dLabel(a):dLabel(a)+' – '+dLabel(b))(dRangeDates())+'</span>';
   $('dView').innerHTML=[['list','ทีละรายการ (มีรูป)'],['sku','รวมตามสินค้า'],['co','แยกตามบริษัท']].map(([k,l])=>'<button class="chip" type="button" data-dv="'+k+'" aria-pressed="'+(dView===k)+'">'+l+'</button>').join('');
   $('dXlsx').textContent=dView==='co'?'ส่งออก Excel แยกบริษัท':'ส่งออก Excel';
+  $('dFillCo').hidden=!(isAdmin()&&mode==='gas');
   const ag=dmgAgg();const byWhy={};dmgList.forEach(r=>byWhy[r.why]=(byWhy[r.why]||0)+1);
   $('dStats').innerHTML='<div class="stat"><b>'+dmgList.length+'</b><span>ครั้งที่บันทึก</span></div><div class="stat"><b>'+ag.length+'</b><span>สินค้า (SKU)</span></div>'+(dk==='ret'?'<div class="stat"><b>'+new Set(dmgList.map(r=>r.ord).filter(Boolean)).size+'</b><span>พัสดุ (เลขคำสั่งซื้อ)</span></div>':'<div class="stat"><b style="font-size:15px;line-height:1.5">'+(Object.entries(byWhy).map(([k,v])=>esc(k)+' '+v).join('<br>')||'–')+'</b><span>แยกตาม'+K.whyLabel+'</span></div>');
   const out=$('dOut');
@@ -1185,6 +1187,12 @@ async function exportDmg(onlyCo){
   finally{b.disabled=false;b.textContent=bt}
 }
 $('dXlsx').addEventListener('click',()=>exportDmg());
+$('dFillCo').addEventListener('click',async()=>{
+  if(!isAdmin())return;const b=$('dFillCo');b.disabled=true;b.textContent='กำลังเติม…';
+  try{const r=await gs('fillCompany',COMPANY);toast('เติมบริษัทแล้ว ชำรุด '+(r.dmg||0)+' แถว · ตีกลับ '+(r.ret||0)+' แถว',4000);loadDmg()}
+  catch(e){toast('ทำไม่สำเร็จ (ต้องอัปโค้ด Apps Script ล่าสุดก่อน)',4500)}
+  finally{b.disabled=false;b.textContent='เติมบริษัทย้อนหลังลง Sheet'}
+});
 
 /* ---------- events ---------- */
 let toastT;function toast(m,ms){const t=$('toast');t.textContent=m;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,ms||2200)}
