@@ -951,9 +951,9 @@ const scanSvg='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke
 /* บริษัทของสินค้า: จากตาราง COMPANY (รหัส → บริษัท) ถ้าไม่มีใช้ที่เคยกรอกไว้ในเครื่องนี้ */
 try{lastCo=JSON.parse(ls.get('stk_co')||'{}')||{}}catch(e){lastCo={}}
 const NOCO='ไม่ระบุบริษัท';
-function coOf(c){return (window.COMPANY&&COMPANY[c])||lastCo[c]||''}
+function coOf(c){return ((typeof COMPANY!=='undefined')&&COMPANY[c])||lastCo[c]||''}
 function recCo(r){return r.co||coOf(r.c)||NOCO}
-function knownCos(){const s=new Set();if(window.COMPANY)Object.values(COMPANY).forEach(v=>v&&s.add(v));Object.values(lastCo).forEach(v=>v&&s.add(v));['dmg','ret'].forEach(k=>lists[k].forEach(r=>r.co&&s.add(r.co)));return [...s].sort((a,b)=>a.localeCompare(b,'th'))}
+function knownCos(){const s=new Set();if((typeof COMPANY!=='undefined'))Object.values(COMPANY).forEach(v=>v&&s.add(v));Object.values(lastCo).forEach(v=>v&&s.add(v));['dmg','ret'].forEach(k=>lists[k].forEach(r=>r.co&&s.add(r.co)));return [...s].sort((a,b)=>a.localeCompare(b,'th'))}
 function openDamage(p,ui,opts={}){
   const K=KD[dk];
   if(mode!=='gas'){toast('บันทึก'+K.label+'ได้เมื่อต่อเน็ตและเปิดผ่านลิงก์เว็บเท่านั้น');return}
@@ -1031,7 +1031,7 @@ async function saveDamage(){
       const r=await gs(K.add,rec,s.photos.map(x=>x.b64));
       rec.img=(r&&r.img)||[];rec.base=Math.round(q*u.f*1000)/1000;
       if(s.kind==='dmg')damage[rec.c]=(damage[rec.c]||0)+rec.base;
-      if(co&&!(window.COMPANY&&COMPANY[rec.c])){lastCo[rec.c]=co;ls.set('stk_co',JSON.stringify(lastCo))}
+      if(co&&!((typeof COMPANY!=='undefined')&&COMPANY[rec.c])){lastCo[rec.c]=co;ls.set('stk_co',JSON.stringify(lastCo))}
       if(s.kind==='ret')lastOrd={v:rec.ord,t:Date.now()};
       lists[s.kind].unshift(rec);s.busy=false;closeSheetQuiet();
       try{navigator.vibrate&&navigator.vibrate(40)}catch(e){}
