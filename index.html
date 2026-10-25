@@ -158,6 +158,14 @@ td .sub{display:block;font-size:12px;color:var(--muted)}
 .diff{font-weight:600}
 .diff.pos{color:var(--warn)} .diff.neg{color:var(--bad)} .diff.zero{color:var(--good)}
 .grp td{background:var(--sunk);font-weight:600;font-size:12px;color:var(--muted)}
+.sumbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+.sumbar input[type=date]{background:var(--surface);font-size:15px;padding:8px 10px}
+.sumstats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px}
+.sumstats div{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px;text-align:center}
+.sumstats b{display:block;font-size:18px;font-variant-numeric:tabular-nums}
+.sumstats span{font-size:11px;color:var(--muted)}
+.plus{color:var(--good);font-weight:600}.minus{color:var(--bad);font-weight:600}
+#tabSum table{min-width:0}#tabSum td,#tabSum th{padding:8px 7px} tr.srow{cursor:pointer} tr.sdet td{background:var(--sunk);font-size:12px;padding:6px 10px}
 .btnrow{display:flex;gap:8px;flex-wrap:wrap}
 .btn{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:9px 14px;font-weight:600}
 .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
@@ -262,10 +270,12 @@ textarea{width:100%;min-height:120px;border:1px solid var(--line);border-radius:
         <span class="hint" id="sysMsg"></span>
       </div>
     </details>
-    <div class="filters" id="filters"></div>
+    <div class="sumbar"><label class="hint" for="sumDate" style="margin:0">วันที่</label><input id="sumDate" class="field" type="date"><button class="btn" id="sumToday" type="button">วันนี้</button><span class="hint" id="sumMsg" style="margin:0"></span></div>
+    <div class="sumstats" id="sumStats"></div>
+    <div class="filters" id="filters" hidden></div>
     <input id="sq" class="field" type="search" placeholder="กรองตามชื่อหรือรหัส" aria-label="กรองสรุป" style="background:var(--surface)">
     <div class="tablewrap"><table>
-      <thead><tr><th>สินค้า</th><th>นับได้</th><th class="n">รวม (หน่วยเล็ก)</th></tr></thead>
+      <thead><tr><th>สินค้า</th><th class="n">ครั้ง</th><th class="n">เพิ่ม / ลด</th><th class="n">ยอดรวม</th></tr></thead>
       <tbody id="sumBody"></tbody>
     </table></div>
     <div class="btnrow">
@@ -555,38 +565,54 @@ function render(){
   if(tab==='sum')renderSum(T);
   if($('q').value.trim())renderResults();
 }
-function sumRows(T){
-  const rows=[];const system={};const sysOn=false;
-  const codes=new Set([...T.keys(),...(sysOn?Object.keys(system):[])]);
-  codes.forEach(c=>{
-    const p=byCode.get(c);const t=T.get(c);const dm=damage[c]||0;const sv0=system[c];
-    const counted=t?t.base:0;const has=sv0!==undefined&&sv0!==null;const sv=has?sv0:null;
-    rows.push({c,p,t,counted,sys:sv,dmg:0,diff:has?Math.round((counted-sv)*1000)/1000:null,status:!t?'uncounted':(has?(counted-sv===0?'match':'diff'):'nosys')});
-  });
+/* ---------- สรุป: รวมยอดต่อสินค้า เลือกวันได้ ---------- */
+let sumDate='',sumCache={},sumOpen=new Set();
+function sumDay(){return sumDate||date}
+function sumEntries(){
+  const d=sumDay();if(d===date)return allEntries();
+  const k=wh+'_'+d;if(sumCache[k])return sumCache[k].entries;
+  loadSumDay(k,d);return null;
+}
+async function loadSumDay(k,d){
+  if(sumCache[k]&&sumCache[k].busy)return;sumCache[k]={busy:true,entries:null};$('sumMsg').textContent='กำลังโหลด…';
+  try{let es;if(mode==='gas'){const r=await gs('getSession',wh,d);es=((r&&r.entries)||[])}else es=readLocal(k);
+    sumCache[k]={entries:es.filter(e=>!e.x).sort((a,b)=>b.t-a.t)}}
+  catch(e){delete sumCache[k];$('sumMsg').textContent='โหลดไม่สำเร็จ ลองกดใหม่';return}
+  if(k===wh+'_'+sumDay()&&tab==='sum')renderSum();
+}
+function sumAgg(E){
+  const M=new Map();
+  for(const e of E){let a=M.get(e.c);if(!a){a={c:e.c,n:0,plus:0,minus:0,base:0,ents:[]};M.set(e.c,a)}
+    const v=e.q*e.f;a.n++;if(v>=0)a.plus+=v;else a.minus+=-v;a.base+=v;a.ents.push(e)}
+  const rows=[...M.values()].map(a=>Object.assign(a,{p:byCode.get(a.c),plus:Math.round(a.plus*1000)/1000,minus:Math.round(a.minus*1000)/1000,base:Math.round(a.base*1000)/1000}));
   rows.sort((a,b)=>((a.p?a.p.g:'zz').localeCompare(b.p?b.p.g:'zz','th'))||((a.p?a.p.n:a.c).localeCompare(b.p?b.p.n:b.c,'th')));
   return rows;
 }
-function renderSum(T){
-  T=T||totals();const rows=sumRows(T);const sysOn=false;
-  const cnt={all:rows.length,diff:rows.filter(r=>r.status==='diff').length,match:rows.filter(r=>r.status==='match').length,uncounted:rows.filter(r=>r.status==='uncounted').length};
-  const F=[['all','ทั้งหมด']].concat(sysOn?[['diff','ไม่ตรงระบบ'],['match','ตรง'],['uncounted','ยังไม่นับ']]:[]);
-  if(!sysOn&&sumFilter!=='all')sumFilter='all';
-  $('filters').innerHTML=F.map(([k,l])=>'<button class="chip" type="button" data-f="'+k+'" aria-pressed="'+(sumFilter===k)+'">'+l+'<span class="c">'+cnt[k]+'</span></button>').join('');
+function sumRows(){const E=sumEntries();return E?sumAgg(E):null}
+function renderSum(){
+  const d=sumDay();$('sumDate').value=d;$('sumDate').max=today();$('sumToday').hidden=d===date;
+  const rows=sumRows();
+  if(!rows){$('sumBody').innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px">กำลังโหลดข้อมูลวันที่ '+esc(d.split('-').reverse().join('/'))+'…</td></tr>';$('sumStats').innerHTML='';return}
+  $('sumMsg').textContent=WH[wh]+' · '+d.split('-').reverse().join('/');
+  const tn=rows.reduce((x,r)=>x+r.n,0),pn=rows.reduce((x,r)=>x+r.ents.filter(e=>e.q*e.f>=0).length,0);
+  $('sumStats').innerHTML='<div><b>'+rows.length+'</b><span>สินค้า</span></div><div><b>'+tn+'</b><span>นับทั้งหมด (ครั้ง)</span></div><div><b class="plus">'+pn+'</b><span>ครั้งที่ + เพิ่ม</span></div><div><b class="minus">'+(tn-pn)+'</b><span>ครั้งที่ − ลด</span></div>';
   const q=$('sq').value.trim().toLowerCase();
-  const vis=rows.filter(r=>(sumFilter==='all'||r.status===sumFilter)&&(!q||((r.p?r.p.key:r.c.toLowerCase()).includes(q))));
+  const vis=rows.filter(r=>!q||((r.p?r.p.key:r.c.toLowerCase()).includes(q)));
   let g=null,html='';
   for(const r of vis){
     const grp=r.p?r.p.g:'ไม่พบในรายการสินค้า';
-    if(grp!==g){g=grp;html+='<tr class="grp"><td colspan="3">'+esc(grp)+'</td></tr>'}
-    const bu=r.p?baseUnit(r.p):'';
-    const d=r.diff;const dc=d===null?'':(d===0?'zero':(d>0?'pos':'neg'));
-    html+='<tr><td><span>'+esc(r.p?r.p.n:r.c)+'</span><span class="sub mono">'+esc(r.c)+'</span></td>'+
-      '<td>'+(r.t?esc(breakdown(r.t)):'<span class="sub">ยังไม่นับ</span>')+'</td>'+
-      '<td class="n">'+(r.t?'<b>'+fmt(r.counted)+'</b> '+esc(bu):'–')+'</td>'+
-      '</tr>';
+    if(grp!==g){g=grp;html+='<tr class="grp"><td colspan="4">'+esc(grp)+'</td></tr>'}
+    const bu=r.p?baseUnit(r.p):'';const open=sumOpen.has(r.c);
+    html+='<tr class="srow" data-sc="'+esc(r.c)+'"><td><span>'+esc(r.p?r.p.n:r.c)+'</span><span class="sub mono">'+esc(r.c)+' · '+(open?'▲ ซ่อนรายละเอียด':'▼ ดูทีละครั้ง')+'</span></td>'+
+      '<td class="n">'+r.n+'</td><td class="n"><span class="plus">'+(r.plus?'+'+fmt(r.plus):'+0')+'</span><span class="sub minus">'+(r.minus?'−'+fmt(r.minus):'−0')+'</span></td>'+
+      '<td class="n"><b>'+fmt(r.base)+'</b> '+esc(bu)+(breakdown(r)!==fmt(r.base)+' '+bu?'<span class="sub">'+esc(breakdown(r))+'</span>':'')+'</td></tr>';
+    if(open)html+=r.ents.map(e=>{const v=e.q*e.f;return '<tr class="sdet"><td>'+new Date(e.t).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})+' · '+esc(e.n||'?')+'</td><td></td><td class="n '+(v>=0?'plus':'minus')+'" colspan="2">'+(v>=0?'+':'−')+fmt(Math.abs(e.q))+' '+esc(e.u)+(e.k==='set'?' (ตั้งยอด)':'')+'</td></tr>'}).join('');
   }
-  $('sumBody').innerHTML=html||'<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:24px">'+(rows.length?'ไม่มีรายการตามตัวกรองนี้':'ยังไม่มีข้อมูลการนับในรอบนี้')+'</td></tr>';
+  $('sumBody').innerHTML=html||'<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:24px">'+(rows.length?'ไม่มีรายการตามตัวกรองนี้':'ไม่มีการนับใน '+esc(WH[wh])+' วันที่ '+esc(d.split('-').reverse().join('/')))+'</td></tr>';
 }
+$('sumBody').addEventListener('click',e=>{const r=e.target.closest('[data-sc]');if(!r)return;const c=r.dataset.sc;sumOpen.has(c)?sumOpen.delete(c):sumOpen.add(c);renderSum()});
+$('sumDate').addEventListener('change',()=>{const v=$('sumDate').value;sumDate=(!v||v===date)?'':v;sumOpen.clear();renderSum()});
+$('sumToday').addEventListener('click',()=>{sumDate='';renderSum()});
 function renderResults(){
   const q=$('q').value.trim();const box=$('results');
   if(!q){box.hidden=true;return}
@@ -637,6 +663,7 @@ function updateConv(){
 }
 function saveEntry(){
   const s=sheetState;if(!s||!canWrite)return;
+  if(!whChosen()){needName();return}
   if(!curCounter()){openNameSheet(()=>{sheetState=s;drawProduct();saveEntry()});return}
   const u=s.p.units[s.ui];const q=s.q;
   if(s.edit){
@@ -855,9 +882,9 @@ $('imgIn').addEventListener('change',async e=>{
 
 /* ---------- export ---------- */
 function exportRows(){
-  const rows=sumRows(totals());
-  const head=['คลัง','วันที่','รหัสสินค้า','ชื่อสินค้า','หน่วยเล็กสุด','นับได้ (รายละเอียด)','นับได้รวม',];
-  return [head].concat(rows.map(r=>[WH[wh],date,r.c,r.p?r.p.n:'',r.p?baseUnit(r.p):'',r.t?breakdown(r.t):'',r.t?r.counted:0]));
+  const rows=sumRows()||[];
+  const head=['คลัง','วันที่','รหัสสินค้า','ชื่อสินค้า','หน่วยเล็กสุด','นับกี่ครั้ง','+ เพิ่ม','− ลด','ยอดรวม','ยอดรวม (แยกหน่วย)'];
+  return [head].concat(rows.map(r=>[WH[wh],sumDay(),r.c,r.p?r.p.n:'',r.p?baseUnit(r.p):'',r.n,r.plus,r.minus,r.base,breakdown(r)]));
 }
 $('copyBtn').addEventListener('click',()=>{
   const txt=exportRows().map(r=>r.map(v=>String(v).replace(/[\t\n]/g,' ')).join('\t')).join('\n');
@@ -932,7 +959,7 @@ $('sysSave').addEventListener('click',async()=>{
   $('sysMsg').textContent='จับคู่ได้ '+ok+' รายการ'+(miss.length?' · ไม่พบรหัส '+miss.length+' ('+miss.slice(0,5).join(', ')+(miss.length>5?'…':'')+')':'');
   ls.set('stk_sys_'+sid(),JSON.stringify(map));
   if(mode==='gas'){try{await gs('saveSystem',wh,date,map)}catch(e){$('sysMsg').textContent+=' · ยังส่งขึ้น Sheet ไม่ได้ ตรวจสัญญาณแล้วกดบันทึกอีกครั้ง'}}
-  sumFilter='diff';renderSum();
+  renderSum();
 });
 $('sysClear').addEventListener('click',async()=>{
   system={};$('sysIn').value='';$('sysMsg').textContent='ล้างแล้ว';render();
@@ -1021,7 +1048,7 @@ function dmgInput(e){const s=sheetState;const id=e.target.id;
   if(id==='qtyIn')dmgConv();if(id==='dNote')s.note=e.target.value;if(id==='dCo')s.co=e.target.value;if(id==='dOrd'){s.ord=e.target.value;dmgConv()}}
 async function saveDamage(){
   const s=sheetState;if(!s||!s.dmg||s.busy)return;const K=KD[s.kind];
-  if(!curCounter()){openNameSheet(null,true);return}
+  if(!whChosen()||!curCounter()){needName();return}
   const u=s.p.units[s.ui];const q=s.q;if(!(q>0)||(!K.noPhoto&&!s.photos.length))return;
   if(s.kind==='ret'&&!String(s.ord||'').trim())return;
   const co=String(s.co||'').trim();
@@ -1196,8 +1223,16 @@ $('dFillCo').addEventListener('click',async()=>{
 
 /* ---------- events ---------- */
 let toastT;function toast(m,ms){const t=$('toast');t.textContent=m;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,ms||2200)}
-function paintWh(){WHK.forEach(k=>$('wh'+k).setAttribute('aria-pressed',wh===k))}
-function setWh(w){wh=w;ls.set('stk_wh',w);paintWh();subscribe();if(tab==='dmg'||tab==='ret')loadDmg()}
+/* ต้องเลือกคลังทุกวันก่อนเริ่มนับ (ต่อเครื่อง) */
+function whChosen(){return ls.get('stk_whpick_'+today())===wh}
+function paintWh(){const ok=whChosen();WHK.forEach(k=>$('wh'+k).setAttribute('aria-pressed',ok&&wh===k))}
+function openWhSheet(after){
+  if(!$('scanner').hidden){try{closeScanner()}catch(e){}}
+  sheetState={pickWh:true,after,forced:true};
+  openSheet('<div class="pname" id="sheetTitle">วันนี้นับที่คลังไหน</div><div class="hint"><b>เลือกคลังก่อนเริ่มนับ</b> เปลี่ยนคลังได้ภายหลังจากปุ่มด้านบน</div>'+
+    '<div class="units" style="grid-template-columns:1fr">'+WHK.map(k=>'<button class="unit" type="button" data-pickwh="'+k+'" style="text-align:center;padding:16px 6px"><b style="font-size:18px">'+esc(WH[k])+'</b></button>').join('')+'</div>');
+}
+function setWh(w){wh=w;ls.set('stk_wh',w);ls.set('stk_whpick_'+today(),w);paintWh();subscribe();if(tab==='dmg'||tab==='ret')loadDmg()}
 WHK.forEach(k=>$('wh'+k).onclick=()=>setWh(k));
 function paintDate(){$('date').textContent=new Date(date+'T00:00').toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'numeric'})}
 function rollDay(){if(date!==today()){date=today();paintDate();if(mode!=='init')subscribe()}}
@@ -1228,7 +1263,8 @@ function confirmName(n){
   toast('คนนับวันนี้: '+n);
 }
 $('counterBtn').onclick=()=>{if(curCounter())toast('วันนี้นับในชื่อ '+counter+' เปลี่ยนได้หลังเที่ยงคืน');else{fromScanner=false;openNameSheet(null)}};
-function needName(){if(!curCounter()){fromScanner=false;openNameSheet(null,true);return true}return false}
+function needName(){if(!whChosen()){fromScanner=false;if(!(sheetState&&sheetState.pickWh))openWhSheet(()=>needName());return true}
+  if(!curCounter()){fromScanner=false;openNameSheet(null,true);return true}return false}
 (function midnight(){const n=new Date();const m=new Date(n.getFullYear(),n.getMonth(),n.getDate()+1,0,0,2);setTimeout(()=>{needName();midnight()},m-n)})();
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)needName()});
 paintCounter();
@@ -1255,6 +1291,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('sheet').hidd
 $('sheetBody').addEventListener('click',e=>{
   const s=sheetState;if(!s)return;const t=e.target;
   if(t.closest('#cancelBtn')){closeSheet();return}
+  if(s.pickWh){const b=t.closest('[data-pickwh]');if(b){const a=s.after;setWh(b.dataset.pickwh);closeSheetQuiet();toast('นับที่ '+WH[b.dataset.pickwh]);if(a)a()}return}
   if(s.pickName){
     const nb=t.closest('[data-name]');if(nb){s.sel=nb.dataset.name;document.querySelectorAll('[data-name]').forEach(x=>x.setAttribute('aria-pressed',x===nb));const ok=$('nmOk');ok.disabled=false;ok.textContent='ยืนยัน: '+s.sel;
       const adm=s.sel===ADMIN;$('pinBox').hidden=!adm;if(adm){$('pinIn').value='';setTimeout(()=>{const p=$('pinIn');if(p)p.focus()},30)}return}
