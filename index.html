@@ -146,6 +146,7 @@ h2{font-size:13px;font-weight:600;letter-spacing:.06em;color:var(--muted);margin
 
 
 .filters{display:flex;gap:6px;flex-wrap:wrap}
+.dayrow{display:flex;align-items:center;gap:6px;width:100%;flex-wrap:wrap;margin-top:6px}.dayrow input{background:var(--surface);font-size:15px;padding:6px 10px}.chip[disabled]{opacity:.4}
 .chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 12px;font-size:13px;font-weight:500}
 .chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .chip .c{font-variant-numeric:tabular-nums;opacity:.7;margin-left:4px}
@@ -973,6 +974,8 @@ const KD={
   ret:{label:'ตีกลับ',head:'รับเข้าสินค้าตีกลับ',sub:'พัสดุตีกลับจากลูกค้า/ขนส่ง · สแกนเลขคำสั่งซื้อหรือแทรค · ดึงรีพอตไปเพิ่มสต็อกใน BigSeller',why:['รับเข้า'],whyLabel:'',noPhoto:true,add:'addReturn',list:'listReturn',del:'deleteReturn',pre:'R',sign:'+',photoLabel:'รูปสินค้า/พัสดุที่ตีกลับ',note:'หมายเหตุ (ถ้ามี) เช่น ลูกค้าปฏิเสธรับ ที่อยู่ผิด'}
 };
 let dk='dmg';const lists={dmg:[],ret:[]};
+let dDay='';
+function setDay(v){if(!v)return;if(v>today())v=today();if(v===today()){dRange='today';dDay=''}else{dRange='day';dDay=v}loadDmg()}
 let dmgList=lists.dmg,dRange='today',dScope='wh',dView='list',dLoading=false,dErr='';
 let lastOrd={v:'',t:0},lastCo={};
 const camSvg='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>';
@@ -1111,6 +1114,7 @@ $('dScanBtn').onclick=()=>$('scanBtn').onclick();
 function ymd(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
 function dRangeDates(){
   const t=new Date(today()+'T00:00');const back=n=>{const d=new Date(t);d.setDate(d.getDate()-n);return ymd(d)};
+  if(dRange==='day'&&dDay)return[dDay,dDay];
   if(dRange==='today')return[today(),today()];
   if(dRange==='7')return[back(6),today()];
   if(dRange==='30')return[back(29),today()];
@@ -1151,7 +1155,9 @@ function renderDmg(){
   const K=KD[dk];dmgList=lists[dk];
   $('dHeadT').textContent=K.head;outPaint();$('dRepT').textContent='รีพอตสินค้า'+K.label;
   const R=[['today','วันนี้'],['7','7 วัน'],['30','30 วัน'],['month','เดือนนี้'],['lmonth','เดือนก่อน']];
-  $('dRange').innerHTML=R.map(([k,l])=>'<button class="chip" type="button" data-dr="'+k+'" aria-pressed="'+(dRange===k)+'">'+l+'</button>').join('');
+  const dd=dRange==='day'&&dDay?dDay:today();
+  $('dRange').innerHTML=R.map(([k,l])=>'<button class="chip" type="button" data-dr="'+k+'" aria-pressed="'+(dRange===k)+'">'+l+'</button>').join('')+
+    '<div class="dayrow"><button class="chip" type="button" data-dstep="-1" aria-label="วันก่อน">◀</button><input id="dDayPick" class="field" type="date" max="'+today()+'" value="'+dd+'" aria-label="เลือกวัน"'+(dRange==='day'||dRange==='today'?'':' style="opacity:.55"')+'><button class="chip" type="button" data-dstep="1" aria-label="วันถัดไป"'+(dd>=today()?' disabled':'')+'>▶</button><span class="hint" style="margin:0">'+(dRange==='day'||dRange==='today'?new Date(dd+'T00:00').toLocaleDateString('th-TH',{weekday:'long',day:'numeric',month:'short'}):'แตะเลือกวันเพื่อดูรายวัน')+'</span></div>';
   $('dScope').innerHTML=[['wh','เฉพาะ'+WH[wh]],['all','ทุกคลัง']].map(([k,l])=>'<button class="chip" type="button" data-ds="'+k+'" aria-pressed="'+(dScope===k)+'">'+l+'</button>').join('')+
     '<span class="hint" style="margin:0 0 0 4px">'+(([a,b])=>a===b?dLabel(a):dLabel(a)+' – '+dLabel(b))(dRangeDates())+'</span>';
   $('dView').innerHTML=[['list','ทีละรายการ (มีรูป)'],['sku','รวมตามสินค้า'],['co','แยกตามบริษัท']].map(([k,l])=>'<button class="chip" type="button" data-dv="'+k+'" aria-pressed="'+(dView===k)+'">'+l+'</button>').join('');
@@ -1180,7 +1186,8 @@ function renderDmg(){
 }
 $('tabDmg').addEventListener('click',async e=>{
   const t=e.target;
-  const r=t.closest('[data-dr]');if(r){dRange=r.dataset.dr;loadDmg();return}
+  const r=t.closest('[data-dr]');if(r){dRange=r.dataset.dr;dDay='';loadDmg();return}
+  const st=t.closest('[data-dstep]');if(st){const base=new Date(((dRange==='day'&&dDay)||today())+'T00:00');base.setDate(base.getDate()+(+st.dataset.dstep));setDay(ymd(base));return}
   const sc=t.closest('[data-ds]');if(sc){dScope=sc.dataset.ds;loadDmg();return}
   const v=t.closest('[data-dv]');if(v){dView=v.dataset.dv;renderDmg();return}
   const ce=t.closest('[data-coexp]');if(ce){e.preventDefault();exportDmg(ce.dataset.coexp);return}
@@ -1358,6 +1365,7 @@ $('filters').addEventListener('click',e=>{const b=e.target.closest('[data-f]');i
 $('sq').addEventListener('input',()=>renderSum());
 if(!WH[wh])wh='CM';paintWh();
 if(ONLY_DMG){wh='CM';ls.set('stk_wh','CM');document.querySelector('.seg[aria-label="คลังสินค้า"]').hidden=true;$('dScope').hidden=true;document.querySelector('.brand').firstChild.textContent='ชำรุด · เชียงใหม่';document.querySelector('#counterBtn .lbl').textContent='คนบันทึก';document.title='บันทึกสินค้าชำรุด';['tbCount','tbSum','tbRet'].forEach(id=>$(id).hidden=true);document.querySelector('nav.tabs').hidden=true;document.body.classList.add('onlydmg');setTab('dmg')}
+document.addEventListener('change',e=>{if(e.target&&e.target.id==='dDayPick')setDay(e.target.value)});
 init();
 needName();
 setTimeout(sendOutbox,800);
