@@ -1291,7 +1291,24 @@ function confirmName(n){
   try{$('q').focus()}catch(e){}
   toast('คนนับวันนี้: '+n);
 }
-$('counterBtn').onclick=()=>{if(curCounter())toast('วันนี้นับในชื่อ '+counter+' เปลี่ยนได้หลังเที่ยงคืน');else{fromScanner=false;openNameSheet(null)}};
+/* สลับเข้า/ออกโหมดแอดมินได้ตลอด (ใส่ PIN) — ใช้ลงชำรุดย้อนหลัง */
+function openAdminSheet(){
+  fromScanner=false;sheetState={adminSw:true};
+  const prev=ls.get('stk_prev_'+today())||'';
+  openSheet(isAdmin()
+    ?'<div class="pname" id="sheetTitle">🔒 โหมดแอดมิน</div><div class="hint">ตอนนี้บันทึกในชื่อแอดมิน เลือกวันที่ย้อนหลังได้ในหน้าบันทึกชำรุด</div>'+(prev?'<button class="save" id="admOut" type="button">กลับเป็น '+esc(prev)+'</button>':'')+'<div class="btnrow"><button class="btn" id="cancelBtn" type="button">ปิด</button></div>'
+    :'<div class="pname" id="sheetTitle">เข้าโหมดแอดมิน</div><div class="hint">วันนี้บันทึกในชื่อ <b>'+esc(counter)+'</b> · ใส่ PIN เพื่อสลับเป็นแอดมิน (ลงชำรุดย้อนหลังได้)</div>'+
+     '<input id="admPin" class="field" type="password" inputmode="numeric" maxlength="8" autocomplete="off" placeholder="PIN แอดมิน" style="width:100%;background:var(--surface);font-size:18px;padding:11px;text-align:center;letter-spacing:.4em">'+
+     '<button class="save" id="admIn" type="button">เข้าโหมดแอดมิน</button><div class="btnrow"><button class="btn" id="cancelBtn" type="button">ยกเลิก</button></div>');
+  if(!isAdmin())setTimeout(()=>{const p=$('admPin');if(p)p.focus()},60);
+}
+function adminSwitch(t){
+  if(t.closest('#admIn')){const p=$('admPin');if(!p||p.value!==ADMIN_PIN){toast('PIN ไม่ถูกต้อง');if(p){p.value='';p.focus()}return}
+    ls.set('stk_prev_'+today(),counter);counter=ADMIN;counterDay=today();ls.set('stk_counter_'+counterDay,ADMIN);paintCounter();closeSheetQuiet();toast('เข้าโหมดแอดมินแล้ว');if(typeof renderDmg==='function'&&(tab==='dmg'||tab==='ret'))renderDmg();return}
+  if(t.closest('#admOut')){const prev=ls.get('stk_prev_'+today())||'';if(!prev)return;counter=prev;counterDay=today();ls.set('stk_counter_'+counterDay,prev);paintCounter();closeSheetQuiet();toast('กลับเป็น '+prev+' แล้ว');if(tab==='dmg'||tab==='ret')renderDmg()}
+}
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.id==='admPin'){e.preventDefault();adminSwitch($('admIn'))}});
+$('counterBtn').onclick=()=>{if(curCounter())openAdminSheet();else{fromScanner=false;openNameSheet(null)}};
 function needName(){if(!whChosen()){fromScanner=false;if(!(sheetState&&sheetState.pickWh))openWhSheet(()=>needName());return true}
   if(!curCounter()){fromScanner=false;openNameSheet(null,true);return true}return false}
 (function midnight(){const n=new Date();const m=new Date(n.getFullYear(),n.getMonth(),n.getDate()+1,0,0,2);setTimeout(()=>{needName();midnight()},m-n)})();
@@ -1320,6 +1337,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('sheet').hidd
 $('sheetBody').addEventListener('click',e=>{
   const s=sheetState;if(!s)return;const t=e.target;
   if(t.closest('#cancelBtn')){closeSheet();return}
+  if(s.adminSw){adminSwitch(t);return}
   if(s.pickWh){const b=t.closest('[data-pickwh]');if(b){const a=s.after;setWh(b.dataset.pickwh);closeSheetQuiet();toast('นับที่ '+WH[b.dataset.pickwh]);if(a)a()}return}
   if(s.pickName){
     const nb=t.closest('[data-name]');if(nb){s.sel=nb.dataset.name;document.querySelectorAll('[data-name]').forEach(x=>x.setAttribute('aria-pressed',x===nb));const ok=$('nmOk');ok.disabled=false;ok.textContent='ยืนยัน: '+s.sel;
