@@ -98,9 +98,11 @@ const brandKey=b=>b.toLowerCase().replace(/\s+/g,' ');
 groups.forEach(g=>$('g').insertAdjacentHTML('beforeend','<option>'+esc(g)+'</option>'));
 COS.forEach(c=>$('co').insertAdjacentHTML('beforeend','<option>'+esc(c)+'</option>'));
 function $(id){return document.getElementById(id)}
-function fillBrands(){const g=$('g').value,co=$('co').value;const m=new Map();P.filter(p=>(!g||p.g===g)&&(!co||p.co===co)).forEach(p=>{const k=brandKey(p.br);if(!m.has(k))m.set(k,p.br)});
-  const cur=$('b').value;$('b').innerHTML='<option value="">ทุกแบรนด์</option>'+[...m].sort((a,b)=>a[1].localeCompare(b[1],'th')).map(([k,v])=>'<option value="'+esc(k)+'">'+esc(v)+'</option>').join('');
-  if([...m.keys()].includes(cur))$('b').value=cur}
+function fillBrands(){const g=$('g').value,co=$('co').value;const by=new Map();
+  P.filter(p=>(!g||p.g===g)&&(!co||p.co===co)).forEach(p=>{if(!by.has(p.co))by.set(p.co,new Map());const m=by.get(p.co),k=brandKey(p.br);m.set(k,[p.br,(m.get(k)||[0,0])[1]+1])});
+  const cur=$('b').value;let h='<option value="">ทุกแบรนด์</option>',keys=[];
+  [...by.keys()].sort((a,b)=>coRank.get(a)-coRank.get(b)).forEach(c=>{h+='<optgroup label="'+esc(c)+'">'+[...by.get(c)].sort((a,b)=>a[1][0].localeCompare(b[1][0],'th')).map(([k,[v,n]])=>{keys.push(k);return '<option value="'+esc(k)+'">'+esc(v)+' ('+n+')</option>'}).join('')+'</optgroup>'});
+  $('b').innerHTML=h;if(keys.includes(cur))$('b').value=cur}
 function imgErr(i){const m=i.src.match(/lh3\.googleusercontent\.com\/d\/([^=]+)/);if(m&&!i.dataset.r){i.dataset.r=1;i.src='https://drive.google.com/thumbnail?id='+m[1]+'&sz=w400';return}i.replaceWith(Object.assign(document.createElement('span'),{className:'no',textContent:'ไม่มีรูป'}))}
 function units(p){const sb=$('showBar').checked;return p.us.map((u,i)=>'<div class="u"><b>'+esc(u[0])+'</b>'+(i?' = '+u[1]+' '+esc(p.us[0][0]):'')+(sb&&u[2]?' · '+esc(u[2]):'')+'</div>').join('')}
 function render(){
