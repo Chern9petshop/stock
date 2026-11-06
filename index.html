@@ -146,6 +146,12 @@ h2{font-size:13px;font-weight:600;letter-spacing:.06em;color:var(--muted);margin
 
 
 .filters{display:flex;gap:6px;flex-wrap:wrap}
+.mine{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:10px 0}
+.mine h3{margin:0 0 6px;font-size:14px;display:flex;justify-content:space-between;gap:8px}
+.mine .row{display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--line);font-size:13px}
+.mine .row:first-of-type{border-top:0}.mine .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mine .st{font-size:12px;font-weight:600;white-space:nowrap}.mine .ok{color:var(--good)}.mine .wait{color:var(--warn)}.mine .err{color:var(--bad)}
+.mine .err-msg{font-size:12px;color:var(--bad);padding:0 0 6px}
 .dayrow{display:flex;align-items:center;gap:6px;width:100%;flex-wrap:wrap;margin-top:6px}.dayrow input{background:var(--surface);font-size:15px;padding:6px 10px}.chip[disabled]{opacity:.4}
 .chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 12px;font-size:13px;font-weight:500}
 .chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
@@ -295,6 +301,7 @@ textarea{width:100%;min-height:120px;border:1px solid var(--line);border-radius:
       </button>
     </div>
     <div class="results" id="dresults" hidden></div>
+    <div id="dMine"></div>
 
     <h2><span id="dRepT">รีพอตสินค้าชำรุด</span></h2>
     <div class="filters" id="dRange"></div>
@@ -1064,6 +1071,7 @@ async function saveDamage(){
   if(co&&!((typeof COMPANY!=='undefined')&&COMPANY[rec.c])){lastCo[rec.c]=co;ls.set('stk_co',JSON.stringify(lastCo))}
   if(s.kind==='ret')lastOrd={v:rec.ord,t:Date.now()};
   outbox.push({kind:s.kind,rec,photos:s.photos.map(x=>x.b64)});saveOutbox();
+  {const v=mlogGet();v.unshift({i:rec.i,t:rec.t,c:rec.c,nm:rec.nm,q:rec.q,u:rec.u,st:'wait'});mlogSet(v);paintMine()}
   lists[s.kind].unshift(rec);closeSheetQuiet();
   try{navigator.vibrate&&navigator.vibrate(40)}catch(e){}
   toast('บันทึก'+K.label+' '+K.sign+fmt(q)+' '+u.u+' แล้ว');$('dq').value='';renderDResults();renderDmg();if(!fromScanner)focusSearch();
@@ -1072,6 +1080,27 @@ async function saveDamage(){
 /* คิวส่งรายการชำรุด/ตีกลับ — บันทึกทันที แล้วค่อยส่งขึ้น Sheet เบื้องหลัง (ปิดเว็บแล้วเปิดใหม่ก็ส่งต่อ) */
 let outbox=(()=>{try{const v=JSON.parse(ls.get('stk_dmg_out')||'[]');return Array.isArray(v)?v:[]}catch(e){return[]}})();
 let outBusy=false,outWait=2000;
+/* ประวัติที่เครื่องนี้บันทึกวันนี้ (ไว้ให้พนักงานเช็กว่าส่งขึ้นระบบแล้วหรือยัง) */
+const mlogKey=()=>'stk_dmg_log_'+today();
+function mlogGet(){try{const v=JSON.parse(localStorage.getItem(mlogKey())||'[]');return Array.isArray(v)?v:[]}catch(e){return[]}}
+function mlogSet(v){try{localStorage.setItem(mlogKey(),JSON.stringify(v.slice(0,200)))}catch(e){}}
+function mlogUpd(id,patch){const v=mlogGet();const x=v.find(z=>z.i===id);if(x){Object.assign(x,patch);mlogSet(v)}paintMine()}
+(function(){try{for(let k=localStorage.length-1;k>=0;k--){const key=localStorage.key(k);if(key&&key.startsWith('stk_dmg_log_')&&key!==mlogKey())localStorage.removeItem(key)}}catch(e){}})();
+let failed=(()=>{try{const v=JSON.parse(localStorage.getItem('stk_dmg_fail')||'[]');return Array.isArray(v)?v:[]}catch(e){return[]}})();
+function saveFailed(){try{localStorage.setItem('stk_dmg_fail',JSON.stringify(failed))}catch(e){try{localStorage.setItem('stk_dmg_fail',JSON.stringify(failed.map(o=>({...o,photos:[]}))))}catch(x){}}}
+function paintMine(){
+  const box=$('dMine');if(!box)return;const v=mlogGet();
+  if(!v.length){box.innerHTML='';return}
+  const ok=v.filter(x=>x.st==='ok').length,wait=v.filter(x=>x.st==='wait').length,err=v.filter(x=>x.st==='err').length;
+  box.innerHTML='<div class="mine"><h3><span>บันทึกจากเครื่องนี้วันนี้ ('+v.length+')</span><span class="st">'+(ok?'<span class="ok">✅ '+ok+'</span> ':'')+(wait?'<span class="wait">⏳ '+wait+'</span> ':'')+(err?'<span class="err">❌ '+err+'</span>':'')+'</span></h3>'+
+    v.map(x=>'<div class="row"><span class="nm">'+new Date(x.t).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})+' · '+esc(x.nm||x.c)+' · '+fmt(x.q)+' '+esc(x.u)+'</span><span class="st '+x.st+'">'+(x.st==='ok'?'✅ เข้าระบบแล้ว':x.st==='wait'?'⏳ กำลังส่ง':'❌ ไม่สำเร็จ')+'</span>'+
+      (x.st==='err'?'<button class="btn" type="button" data-mretry="'+esc(x.i)+'" style="padding:4px 8px">ส่งใหม่</button>':'')+'</div>'+(x.st==='err'&&x.err?'<div class="err-msg">'+esc(x.err)+'</div>':'')).join('')+'</div>';
+}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-mretry]');if(!b)return;const id=b.dataset.mretry;const k=failed.findIndex(o=>o.rec.i===id);
+  if(k<0){toast('ไม่พบข้อมูลรายการนี้ในเครื่อง กรุณาบันทึกใหม่',4000);return}
+  const o=failed.splice(k,1)[0];saveFailed();
+  if(!KD[o.kind].noPhoto&&!(o.photos||[]).length){mlogUpd(id,{st:'err',err:'รูปหายจากเครื่อง (พื้นที่เครื่องเต็ม) — กรุณาสแกนและถ่ายรูปบันทึกใหม่'});return}
+  outbox.push(o);saveOutbox();mlogUpd(id,{st:'wait',err:''});outWait=2000;sendOutbox()});
 function saveOutbox(){try{localStorage.setItem('stk_dmg_out',JSON.stringify(outbox))}catch(e){try{localStorage.setItem('stk_dmg_out',JSON.stringify(outbox.map(o=>({...o,photos:[]}))))}catch(x){}}}
 function outPaint(){const n=outbox.length;$('dHeadS').textContent=n?('⏳ กำลังส่งขึ้นระบบ '+n+' รายการ (ส่งเองอัตโนมัติ)'):(KD[dk]?KD[dk].sub||'':'');}
 async function sendOutbox(){
@@ -1080,12 +1109,16 @@ async function sendOutbox(){
     const o=outbox[0];const {pending,local,base,img,...rec}=o.rec;
     try{
       const r=await gs(KD[o.kind].add,rec,o.photos);
-      outbox.shift();saveOutbox();outWait=2000;
+      outbox.shift();saveOutbox();outWait=2000;mlogUpd(o.rec.i,{st:'ok',err:''});
       const L=lists[o.kind].find(x=>x.i===o.rec.i);if(L){L.pending=0;L.img=(r&&r.img)||[];delete L.local}
       if(tab==='dmg'||tab==='ret')renderDmg();outPaint();
     }catch(e){
+      if(e&&e.code==='api'){ /* ระบบปฏิเสธรายการนี้ — แยกออกไม่ให้ค้างคิว รายการอื่นส่งต่อได้ */
+        outbox.shift();saveOutbox();failed.push({...o,err:e.message||''});saveFailed();
+        const L=lists[o.kind].find(x=>x.i===o.rec.i);if(L){const k=lists[o.kind].indexOf(L);lists[o.kind].splice(k,1)}
+        mlogUpd(o.rec.i,{st:'err',err:'ส่งไม่สำเร็จ: '+(e.message||'ไม่ทราบสาเหตุ')});toast('มี 1 รายการส่งไม่สำเร็จ ดูที่ "บันทึกจากเครื่องนี้วันนี้"',4000);
+        if(tab==='dmg'||tab==='ret')renderDmg();continue}
       outBusy=false;outPaint();
-      if(e&&e.code==='api'){toast('ส่งไม่สำเร็จ: '+(e.message||'')+' — จะลองใหม่',4000)}
       setTimeout(sendOutbox,outWait);outWait=Math.min(outWait*2,60000);return;
     }
   }
@@ -1386,7 +1419,7 @@ if(ONLY_DMG){wh='CM';ls.set('stk_wh','CM');document.querySelector('.seg[aria-lab
 document.addEventListener('change',e=>{if(e.target&&e.target.id==='dDayPick')setDay(e.target.value)});
 init();
 needName();
-setTimeout(sendOutbox,800);
+setTimeout(sendOutbox,800);paintMine();
 </script>
 
 </body>
