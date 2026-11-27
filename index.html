@@ -361,7 +361,7 @@ const COMPANY={"0745240448174":"เพ็ท โพรเทคท์ ฟู้�
 const WH={PY:'พะเยา',CM:'เชียงใหม่',FS:'หน้าร้าน'};
 const WHK=Object.keys(WH);
 const $=id=>document.getElementById(id);
-const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=n=>(Math.round(n*1000)/1000).toLocaleString('th-TH');
 const ls={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
 /* โหลดไลบรารีเมื่อจำเป็น พร้อมแหล่งสำรอง */
